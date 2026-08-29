@@ -10,7 +10,6 @@ export const dynamic = "force-dynamic";
 
 type ParcelaStatus = "Pendente" | "Pago" | string;
 type ViewFilter = "abertas" | "atrasadas" | "pagas" | "todas";
-type MainTab = "clientes" | "parcelas";
 
 type ParcelaComCliente = {
   id: string;
@@ -33,6 +32,7 @@ type ClienteResumo = {
   clienteId: string;
   nome: string;
   parcelas: ParcelaComCliente[];
+  parcelasVisiveis: ParcelaComCliente[];
   proximaParcela: ParcelaComCliente | null;
   totalRestante: number;
   totalAtrasado: number;
@@ -43,7 +43,6 @@ type ClienteResumo = {
 type PageProps = {
   searchParams?: Promise<{
     q?: string;
-    tab?: string;
     view?: string;
   }>;
 };
@@ -105,14 +104,30 @@ function sumValorPago(parcelas: ParcelaComCliente[]) {
   return parcelas.reduce((total, parcela) => total + getValorPago(parcela), 0);
 }
 
-function agruparPorCliente(parcelas: ParcelaComCliente[], hojeStr: string) {
+function agruparPorCliente({
+  todasParcelas,
+  parcelasVisiveis,
+  hojeStr,
+}: {
+  todasParcelas: ParcelaComCliente[];
+  parcelasVisiveis: ParcelaComCliente[];
+  hojeStr: string;
+}) {
   const grupos = new Map<string, ParcelaComCliente[]>();
+  const visiveisPorCliente = new Map<string, ParcelaComCliente[]>();
 
-  for (const parcela of parcelas) {
+  for (const parcela of todasParcelas) {
     const clienteId = getClienteId(parcela);
     const existentes = grupos.get(clienteId) ?? [];
     existentes.push(parcela);
     grupos.set(clienteId, existentes);
+  }
+
+  for (const parcela of parcelasVisiveis) {
+    const clienteId = getClienteId(parcela);
+    const existentes = visiveisPorCliente.get(clienteId) ?? [];
+    existentes.push(parcela);
+    visiveisPorCliente.set(clienteId, existentes);
   }
 
   return Array.from(grupos.entries())
@@ -127,6 +142,7 @@ function agruparPorCliente(parcelas: ParcelaComCliente[], hojeStr: string) {
         clienteId,
         nome: getNomeCliente(parcelasDoCliente[0]),
         parcelas: abertas,
+        parcelasVisiveis: visiveisPorCliente.get(clienteId) ?? [],
         proximaParcela: proximas[0] ?? null,
         totalRestante: sumSaldoRestante(abertas),
         totalAtrasado: sumSaldoRestante(atrasadas),
@@ -134,7 +150,7 @@ function agruparPorCliente(parcelas: ParcelaComCliente[], hojeStr: string) {
         proximoVencimento: proximas[0]?.data_vencimento ?? null,
       };
     })
-    .filter((cliente) => cliente.parcelas.length > 0)
+    .filter((cliente) => cliente.parcelasVisiveis.length > 0)
     .sort((a, b) => {
       if (b.atrasadas !== a.atrasadas) {
         return b.atrasadas - a.atrasadas;
@@ -156,21 +172,14 @@ function normalizeView(value: string | undefined): ViewFilter {
   return "abertas";
 }
 
-function normalizeTab(value: string | undefined): MainTab {
-  return value === "parcelas" ? "parcelas" : "clientes";
-}
-
 function buildHref({
-  tab,
   view,
   q,
 }: {
-  tab: MainTab;
   view: ViewFilter;
   q: string;
 }) {
   const params = new URLSearchParams();
-  params.set("tab", tab);
   params.set("view", view);
 
   if (q) {
@@ -178,35 +187,6 @@ function buildHref({
   }
 
   return `/?${params.toString()}`;
-}
-
-function TabLink({
-  tab,
-  activeTab,
-  q,
-  view,
-  label,
-}: {
-  tab: MainTab;
-  activeTab: MainTab;
-  q: string;
-  view: ViewFilter;
-  label: string;
-}) {
-  const active = tab === activeTab;
-
-  return (
-    <a
-      href={buildHref({ tab, view, q })}
-      className={
-        active
-          ? "border border-gray-950 bg-gray-950 px-4 py-2 text-sm font-bold text-white"
-          : "border border-gray-300 bg-white px-4 py-2 text-sm font-bold text-gray-700 hover:bg-gray-50"
-      }
-    >
-      {label}
-    </a>
-  );
 }
 
 function SummaryCard({
@@ -238,13 +218,11 @@ function SummaryCard({
 function FilterLink({
   view,
   activeView,
-  activeTab,
   q,
   count,
 }: {
   view: ViewFilter;
   activeView: ViewFilter;
-  activeTab: MainTab;
   q: string;
   count: number;
 }) {
@@ -252,7 +230,7 @@ function FilterLink({
 
   return (
     <a
-      href={buildHref({ tab: activeTab, view, q })}
+      href={buildHref({ view, q })}
       className={
         active
           ? "border border-blue-700 bg-blue-700 px-3 py-2 text-sm font-semibold text-white"
@@ -351,94 +329,217 @@ function ParcelaCard({
   );
 }
 
-function ClienteCard({ cliente }: { cliente: ClienteResumo }) {
+function ParcelasDoCliente({
+  parcelas,
+  hoje,
+  hojeStr,
+}: {
+  parcelas: ParcelaComCliente[];
+  hoje: Date;
+  hojeStr: string;
+}) {
+  return (
+    <>
+      <div className="hidden overflow-hidden border border-gray-200 bg-white md:block">
+        <table className="w-full border-collapse text-left text-sm">
+          <thead className="bg-gray-100 text-xs font-bold uppercase tracking-wide text-gray-600">
+            <tr>
+              <th className="px-4 py-3">Parcela</th>
+              <th className="px-4 py-3">Vencimento</th>
+              <th className="px-4 py-3">Periodicidade</th>
+              <th className="px-4 py-3 text-right">Valor</th>
+              <th className="px-4 py-3 text-right">Pago</th>
+              <th className="px-4 py-3 text-right">Falta</th>
+              <th className="px-4 py-3">Status</th>
+              <th className="px-4 py-3">Ação</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-200">
+            {parcelas.map((parcela) => {
+              const saldo = getSaldoParcela(parcela);
+              const valorPago = getValorPago(parcela);
+              const isPaga = parcela.status === "Pago";
+              const isAtrasada = !isPaga && parcela.data_vencimento < hojeStr;
+
+              return (
+                <tr key={parcela.id} className="bg-white align-top hover:bg-gray-50">
+                  <td className="px-4 py-3 text-gray-700">
+                    {parcela.numero}
+                  </td>
+                  <td className="px-4 py-3 font-semibold text-gray-900">
+                    {formatDate(parcela.data_vencimento)}
+                  </td>
+                  <td className="px-4 py-3 text-gray-700">
+                    {getPeriodicidadeLabel(parcela)}
+                  </td>
+                  <td className="px-4 py-3 text-right font-semibold text-gray-900">
+                    {formatCurrency(parcela.valor)}
+                  </td>
+                  <td className="px-4 py-3 text-right font-semibold text-emerald-700">
+                    {formatCurrency(valorPago)}
+                  </td>
+                  <td className="px-4 py-3 text-right font-bold text-blue-900">
+                    {formatCurrency(saldo)}
+                  </td>
+                  <td className="px-4 py-3">
+                    <span
+                      className={
+                        isPaga
+                          ? "font-bold text-emerald-700"
+                          : isAtrasada
+                            ? "font-bold text-red-700"
+                            : "font-bold text-blue-700"
+                      }
+                    >
+                      {isPaga ? "Pago" : isAtrasada ? "Atrasada" : "A vencer"}
+                    </span>
+                    {isAtrasada ? (
+                      <span className="mt-1 block text-xs font-semibold text-red-700">
+                        {diasAtraso(parcela.data_vencimento, hoje)} dia(s)
+                      </span>
+                    ) : null}
+                  </td>
+                  <td className="px-4 py-3">
+                    <MarcarPagoButton parcelaId={parcela.id} status={parcela.status} />
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 md:hidden">
+        {parcelas.map((parcela) => (
+          <ParcelaCard
+            key={parcela.id}
+            parcela={parcela}
+            hoje={hoje}
+            hojeStr={hojeStr}
+          />
+        ))}
+      </div>
+    </>
+  );
+}
+
+function ClienteCard({
+  cliente,
+  hoje,
+  hojeStr,
+}: {
+  cliente: ClienteResumo;
+  hoje: Date;
+  hojeStr: string;
+}) {
   const proximaParcela = cliente.proximaParcela;
 
   return (
-    <article className="border border-gray-200 bg-white p-5 shadow-sm">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+    <details className="group border border-gray-200 bg-white shadow-sm">
+      <summary className="grid cursor-pointer list-none gap-4 p-5 marker:hidden lg:grid-cols-[1fr_auto] lg:items-start">
         <div className="min-w-0">
-          <h3 className="truncate text-xl font-bold text-gray-950">{cliente.nome}</h3>
-          <p className="mt-1 text-sm font-medium text-gray-600">
-            {cliente.parcelas.length} parcela(s) faltando
-          </p>
-        </div>
-
-        <div className="bg-blue-50 px-4 py-3 text-left sm:text-right">
-          <p className="text-xs font-bold uppercase tracking-wide text-blue-700">
-            Falta pagar
-          </p>
-          <p className="mt-1 text-2xl font-black text-blue-950">
-            {formatCurrency(cliente.totalRestante)}
-          </p>
-        </div>
-      </div>
-
-      <div className="mt-5 grid grid-cols-1 gap-3 text-sm sm:grid-cols-3">
-        <div className="border border-gray-200 p-3">
-          <p className="text-xs font-bold uppercase tracking-wide text-gray-500">
-            Próximo vencimento
-          </p>
-          <p className="mt-1 font-bold text-gray-950">
-            {cliente.proximoVencimento ? formatDate(cliente.proximoVencimento) : "Sem parcelas"}
-          </p>
-        </div>
-        <div className="border border-gray-200 p-3">
-          <p className="text-xs font-bold uppercase tracking-wide text-gray-500">
-            Atrasadas
-          </p>
-          <p className={cliente.atrasadas > 0 ? "mt-1 font-bold text-red-700" : "mt-1 font-bold text-gray-950"}>
-            {cliente.atrasadas} parcela(s)
-          </p>
-        </div>
-        <div className="border border-gray-200 p-3">
-          <p className="text-xs font-bold uppercase tracking-wide text-gray-500">
-            Valor atrasado
-          </p>
-          <p className={cliente.totalAtrasado > 0 ? "mt-1 font-bold text-red-700" : "mt-1 font-bold text-gray-950"}>
-            {formatCurrency(cliente.totalAtrasado)}
-          </p>
-        </div>
-      </div>
-
-      {proximaParcela ? (
-        <div className="mt-5 flex flex-col gap-3 border-t border-gray-200 pt-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <p className="text-xs font-bold uppercase tracking-wide text-gray-500">
-              Próxima parcela
-            </p>
-            <p className="mt-1 text-sm font-bold text-gray-950">
-              Parcela {proximaParcela.numero} • falta{" "}
-              {formatCurrency(getSaldoParcela(proximaParcela))} •{" "}
-              vence {formatDate(proximaParcela.data_vencimento)}
-            </p>
-            <p className="mt-1 text-xs font-semibold text-gray-500">
-              Vencimento {getPeriodicidadeLabel(proximaParcela)}
-            </p>
-            {getValorPago(proximaParcela) > 0 ? (
-              <p className="mt-1 text-xs font-semibold text-blue-700">
-                Já pago nesta parcela: {formatCurrency(getValorPago(proximaParcela))}
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="min-w-0">
+              <h3 className="truncate text-xl font-bold text-gray-950">{cliente.nome}</h3>
+              <p className="mt-1 text-sm font-medium text-gray-600">
+                {cliente.parcelas.length} parcela(s) em aberto •{" "}
+                {cliente.parcelasVisiveis.length} nesta visão
               </p>
-            ) : null}
+            </div>
+
+            <div className="bg-blue-50 px-4 py-3 text-left sm:text-right">
+              <p className="text-xs font-bold uppercase tracking-wide text-blue-700">
+                Falta pagar
+              </p>
+              <p className="mt-1 text-2xl font-black text-blue-950">
+                {formatCurrency(cliente.totalRestante)}
+              </p>
+            </div>
           </div>
-          <div className="w-full sm:max-w-sm">
-            <RegistrarPagamentoForm
-              clienteId={cliente.clienteId}
-              saldoAberto={cliente.totalRestante}
-            />
+
+          <div className="mt-5 grid grid-cols-1 gap-3 text-sm sm:grid-cols-3">
+            <div className="border border-gray-200 p-3">
+              <p className="text-xs font-bold uppercase tracking-wide text-gray-500">
+                Próximo vencimento
+              </p>
+              <p className="mt-1 font-bold text-gray-950">
+                {cliente.proximoVencimento ? formatDate(cliente.proximoVencimento) : "Sem parcelas"}
+              </p>
+            </div>
+            <div className="border border-gray-200 p-3">
+              <p className="text-xs font-bold uppercase tracking-wide text-gray-500">
+                Atrasadas
+              </p>
+              <p className={cliente.atrasadas > 0 ? "mt-1 font-bold text-red-700" : "mt-1 font-bold text-gray-950"}>
+                {cliente.atrasadas} parcela(s)
+              </p>
+            </div>
+            <div className="border border-gray-200 p-3">
+              <p className="text-xs font-bold uppercase tracking-wide text-gray-500">
+                Valor atrasado
+              </p>
+              <p className={cliente.totalAtrasado > 0 ? "mt-1 font-bold text-red-700" : "mt-1 font-bold text-gray-950"}>
+                {formatCurrency(cliente.totalAtrasado)}
+              </p>
+            </div>
           </div>
         </div>
-      ) : null}
-    </article>
+
+        <span className="border border-gray-300 px-4 py-2 text-center text-sm font-bold text-gray-700 group-open:bg-gray-950 group-open:text-white">
+          Ver parcelas
+        </span>
+      </summary>
+
+      <div className="border-t border-gray-200 p-5 pt-4">
+        {proximaParcela ? (
+          <div className="mb-5 flex flex-col gap-3 border border-blue-100 bg-blue-50 p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wide text-blue-700">
+                Próxima parcela
+              </p>
+              <p className="mt-1 text-sm font-bold text-blue-950">
+                Parcela {proximaParcela.numero} • falta{" "}
+                {formatCurrency(getSaldoParcela(proximaParcela))} •{" "}
+                vence {formatDate(proximaParcela.data_vencimento)}
+              </p>
+              <p className="mt-1 text-xs font-semibold text-blue-800">
+                Vencimento {getPeriodicidadeLabel(proximaParcela)}
+              </p>
+              {getValorPago(proximaParcela) > 0 ? (
+                <p className="mt-1 text-xs font-semibold text-blue-800">
+                  Já pago nesta parcela: {formatCurrency(getValorPago(proximaParcela))}
+                </p>
+              ) : null}
+            </div>
+            <div className="w-full sm:max-w-sm">
+              <RegistrarPagamentoForm
+                clienteId={cliente.clienteId}
+                saldoAberto={cliente.totalRestante}
+              />
+            </div>
+          </div>
+        ) : null}
+
+        <ParcelasDoCliente
+          parcelas={cliente.parcelasVisiveis}
+          hoje={hoje}
+          hojeStr={hojeStr}
+        />
+      </div>
+    </details>
   );
 }
 
 function ClientesSection({
   title,
   clientes,
+  hoje,
+  hojeStr,
 }: {
   title: string;
   clientes: ClienteResumo[];
+  hoje: Date;
+  hojeStr: string;
 }) {
   return (
     <section className="space-y-3">
@@ -456,124 +557,14 @@ function ClientesSection({
       ) : (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           {clientes.map((cliente) => (
-            <ClienteCard key={cliente.clienteId} cliente={cliente} />
+            <ClienteCard
+              key={cliente.clienteId}
+              cliente={cliente}
+              hoje={hoje}
+              hojeStr={hojeStr}
+            />
           ))}
         </div>
-      )}
-    </section>
-  );
-}
-
-function ParcelasSection({
-  title,
-  parcelas,
-  hoje,
-  hojeStr,
-}: {
-  title: string;
-  parcelas: ParcelaComCliente[];
-  hoje: Date;
-  hojeStr: string;
-}) {
-  return (
-    <section className="space-y-3">
-      <div className="flex items-center justify-between gap-3">
-        <h2 className="text-lg font-bold text-gray-950">{title}</h2>
-        <span className="text-sm font-semibold text-gray-500">
-          {parcelas.length} parcela(s)
-        </span>
-      </div>
-
-      {parcelas.length === 0 ? (
-        <div className="border border-dashed border-gray-300 bg-white p-6 text-center text-sm font-medium text-gray-500">
-          Nenhuma parcela nesta visão.
-        </div>
-      ) : (
-        <>
-          <div className="hidden overflow-hidden border border-gray-200 bg-white shadow-sm md:block">
-            <table className="w-full border-collapse text-left text-sm">
-              <thead className="bg-gray-100 text-xs font-bold uppercase tracking-wide text-gray-600">
-                <tr>
-                  <th className="px-4 py-3">Cliente</th>
-                  <th className="px-4 py-3">Parcela</th>
-                  <th className="px-4 py-3">Vencimento</th>
-                  <th className="px-4 py-3">Periodicidade</th>
-                  <th className="px-4 py-3 text-right">Valor</th>
-                  <th className="px-4 py-3 text-right">Pago</th>
-                  <th className="px-4 py-3 text-right">Falta</th>
-                  <th className="px-4 py-3">Status</th>
-                  <th className="px-4 py-3">Ação</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200">
-                {parcelas.map((parcela) => {
-                  const saldo = getSaldoParcela(parcela);
-                  const valorPago = getValorPago(parcela);
-                  const isPaga = parcela.status === "Pago";
-                  const isAtrasada = !isPaga && parcela.data_vencimento < hojeStr;
-
-                  return (
-                    <tr key={parcela.id} className="bg-white align-top hover:bg-gray-50">
-                      <td className="px-4 py-3 font-bold text-gray-950">
-                        {getNomeCliente(parcela)}
-                      </td>
-                      <td className="px-4 py-3 text-gray-700">
-                        {parcela.numero}
-                      </td>
-                      <td className="px-4 py-3 font-semibold text-gray-900">
-                        {formatDate(parcela.data_vencimento)}
-                      </td>
-                      <td className="px-4 py-3 text-gray-700">
-                        {getPeriodicidadeLabel(parcela)}
-                      </td>
-                      <td className="px-4 py-3 text-right font-semibold text-gray-900">
-                        {formatCurrency(parcela.valor)}
-                      </td>
-                      <td className="px-4 py-3 text-right font-semibold text-emerald-700">
-                        {formatCurrency(valorPago)}
-                      </td>
-                      <td className="px-4 py-3 text-right font-bold text-blue-900">
-                        {formatCurrency(saldo)}
-                      </td>
-                      <td className="px-4 py-3">
-                        <span
-                          className={
-                            isPaga
-                              ? "font-bold text-emerald-700"
-                              : isAtrasada
-                                ? "font-bold text-red-700"
-                                : "font-bold text-blue-700"
-                          }
-                        >
-                          {isPaga ? "Pago" : isAtrasada ? "Atrasada" : "A vencer"}
-                        </span>
-                        {isAtrasada ? (
-                          <span className="mt-1 block text-xs font-semibold text-red-700">
-                            {diasAtraso(parcela.data_vencimento, hoje)} dia(s)
-                          </span>
-                        ) : null}
-                      </td>
-                      <td className="px-4 py-3">
-                        <MarcarPagoButton parcelaId={parcela.id} status={parcela.status} />
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-
-          <div className="grid grid-cols-1 gap-4 md:hidden">
-            {parcelas.map((parcela) => (
-              <ParcelaCard
-                key={parcela.id}
-                parcela={parcela}
-                hoje={hoje}
-                hojeStr={hojeStr}
-              />
-            ))}
-          </div>
-        </>
       )}
     </section>
   );
@@ -583,10 +574,7 @@ export default async function Home({ searchParams }: PageProps) {
   const params = (await searchParams) ?? {};
   const q = (params.q ?? "").trim();
   const normalizedQuery = q.toLocaleLowerCase("pt-BR");
-  const activeTab = normalizeTab(params.tab);
-  const requestedView = normalizeView(params.view);
-  const activeView =
-    activeTab === "clientes" && requestedView === "pagas" ? "abertas" : requestedView;
+  const activeView = normalizeView(params.view);
   const hoje = new Date();
   const hojeStr = formatDateOnly(hoje);
   let parcelas: ParcelaComCliente[] = [];
@@ -657,13 +645,11 @@ export default async function Home({ searchParams }: PageProps) {
     pagas,
     todas: filtradasPorBusca,
   }[activeView];
-  const visibleClientes =
-    activeView === "pagas"
-      ? []
-      : agruparPorCliente(
-          activeView === "todas" ? abertas : visibleParcelas,
-          hojeStr
-        );
+  const visibleClientes = agruparPorCliente({
+    todasParcelas: filtradasPorBusca,
+    parcelasVisiveis: visibleParcelas,
+    hojeStr,
+  });
 
   return (
     <main className="min-h-screen bg-gray-50">
@@ -716,7 +702,6 @@ export default async function Home({ searchParams }: PageProps) {
 
         <section className="space-y-3 border border-gray-200 bg-white p-4 shadow-sm">
           <form className="flex flex-col gap-3 md:flex-row" action="/">
-            <input type="hidden" name="tab" value={activeTab} />
             <input type="hidden" name="view" value={activeView} />
             <label className="sr-only" htmlFor="search-client">
               Buscar cliente
@@ -733,67 +718,40 @@ export default async function Home({ searchParams }: PageProps) {
             </button>
           </form>
 
-          <div className="flex flex-wrap gap-2 border-b border-gray-200 pb-3">
-            <TabLink
-              tab="clientes"
-              activeTab={activeTab}
-              q={q}
-              view={activeTab === "clientes" ? activeView : "abertas"}
-              label="Clientes"
-            />
-            <TabLink
-              tab="parcelas"
-              activeTab={activeTab}
-              q={q}
-              view={activeTab === "parcelas" ? activeView : "todas"}
-              label="Parcelas"
-            />
-          </div>
-
           <div className="flex flex-wrap gap-2">
             <FilterLink
               view="abertas"
               activeView={activeView}
-              activeTab={activeTab}
               q={q}
               count={abertas.length}
             />
             <FilterLink
               view="atrasadas"
               activeView={activeView}
-              activeTab={activeTab}
               q={q}
               count={atrasadas.length}
             />
-            {activeTab === "parcelas" ? (
-              <FilterLink
-                view="pagas"
-                activeView={activeView}
-                activeTab={activeTab}
-                q={q}
-                count={pagas.length}
-              />
-            ) : null}
+            <FilterLink
+              view="pagas"
+              activeView={activeView}
+              q={q}
+              count={pagas.length}
+            />
             <FilterLink
               view="todas"
               activeView={activeView}
-              activeTab={activeTab}
               q={q}
               count={filtradasPorBusca.length}
             />
           </div>
         </section>
 
-        {activeTab === "parcelas" ? (
-          <ParcelasSection
-            title={viewLabels[activeView]}
-            parcelas={visibleParcelas}
-            hoje={hoje}
-            hojeStr={hojeStr}
-          />
-        ) : (
-          <ClientesSection title={viewLabels[activeView]} clientes={visibleClientes} />
-        )}
+        <ClientesSection
+          title={viewLabels[activeView]}
+          clientes={visibleClientes}
+          hoje={hoje}
+          hojeStr={hojeStr}
+        />
       </div>
     </main>
   );
