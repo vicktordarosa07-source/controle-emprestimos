@@ -6,7 +6,7 @@ Sistema web privado para controle de emprestimos, parcelas, vencimentos e pagame
 
 ## Funcionalidades
 
-- Login/cadastro com Supabase Auth.
+- Login com Supabase Auth.
 - Dashboard financeiro com total a receber, atrasado, a vencer e recebido.
 - Busca por cliente e filtros por parcelas abertas, atrasadas, pagas ou todas.
 - Criacao de emprestimo com validacao server-side.
@@ -39,11 +39,12 @@ Antes de publicar a versao com login, execute `supabase-production.sql` no SQL E
 Passos obrigatorios:
 
 1. Ative Email/Password em Authentication > Providers.
-2. Crie ou confirme o usuario dono em Authentication > Users.
-3. Copie o `id` desse usuario.
-4. No arquivo `supabase-production.sql`, substitua `OWNER_USER_ID` no comando de backfill.
-5. Remova o comentario do comando `update public.clientes`.
-6. Execute o SQL inteiro.
+2. Desative a confirmacao obrigatoria em Authentication > Providers > Email se quiser entrar sem confirmar e-mail.
+3. Crie o usuario dono em Authentication > Users.
+4. Copie o `id` desse usuario.
+5. No arquivo `supabase-production.sql`, substitua `OWNER_USER_ID` no comando de backfill.
+6. Remova o comentario do comando `update public.clientes`.
+7. Execute o SQL inteiro.
 
 Sem essa migracao, a versao nova pode falhar ao criar clientes porque o app grava `clientes.user_id`.
 
