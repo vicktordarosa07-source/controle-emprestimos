@@ -18,6 +18,7 @@ export function AuthPanel() {
     const email = String(formData.get("email") ?? "").trim();
     const fone = String(formData.get("fone") ?? "").trim();
     const password = String(formData.get("password") ?? "");
+    const confirmPassword = String(formData.get("confirm_password") ?? "");
     const onlyPhoneDigits = fone.replace(/\D/g, "");
 
     setError(null);
@@ -25,6 +26,11 @@ export function AuthPanel() {
 
     if (mode === "signup" && (onlyPhoneDigits.length < 10 || onlyPhoneDigits.length > 15)) {
       setError("Informe um fone valido com DDD.");
+      return;
+    }
+
+    if (mode === "signup" && password !== confirmPassword) {
+      setError("As senhas digitadas nao conferem.");
       return;
     }
 
@@ -160,6 +166,23 @@ export function AuthPanel() {
               className="min-h-11 w-full border border-gray-300 px-3 text-sm outline-none focus:border-blue-700 focus:ring-2 focus:ring-blue-100"
             />
           </div>
+
+          {mode === "signup" ? (
+            <div>
+              <label className="mb-1 block text-sm font-semibold" htmlFor="confirm_password">
+                Repetir senha
+              </label>
+              <input
+                id="confirm_password"
+                name="confirm_password"
+                type="password"
+                required
+                minLength={6}
+                autoComplete="new-password"
+                className="min-h-11 w-full border border-gray-300 px-3 text-sm outline-none focus:border-blue-700 focus:ring-2 focus:ring-blue-100"
+              />
+            </div>
+          ) : null}
 
           <button
             disabled={isPending}
