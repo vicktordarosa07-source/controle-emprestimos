@@ -43,3 +43,18 @@ jobs:
         with:
           name: app-debug
           path: android/app/build/outputs/apk/debug/app-debug.apk
+
+      - name: Create Release
+        if: github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0-${{ github.run_number }}
+          name: Controle Empréstimos v1.0-${{ github.run_number }}
+          body: |
+            Instalador Android gerado automaticamente.
+            - Baixe `app-debug.apk` abaixo e instale no celular.
+            - PWA também disponível em https://controle-emprestimos-project.vercel.app
+          files: android/app/build/outputs/apk/debug/app-debug.apk
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
