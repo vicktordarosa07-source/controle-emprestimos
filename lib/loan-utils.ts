@@ -24,6 +24,7 @@ export type ParcelaInsert = {
 };
 
 const MS_PER_DAY = 1000 * 60 * 60 * 24;
+const DAYS_PER_BILLING_MONTH = 30;
 
 export function parseRequiredText(value: FormDataEntryValue | null, field: string) {
   if (typeof value !== "string" || value.trim().length === 0) {
@@ -191,6 +192,55 @@ function getDataVencimento({
   return addDays(dataPrimeiroVencimento, diasPorParcela * index);
 }
 
+function getPrazoEmMeses({
+  periodicidade,
+  intervaloPersonalizadoDias,
+  qtdParcelas,
+}: {
+  periodicidade: PeriodicidadeVencimento;
+  intervaloPersonalizadoDias: number | null;
+  qtdParcelas: number;
+}) {
+  if (periodicidade === "mensal") {
+    return qtdParcelas;
+  }
+
+  const diasPorParcela = {
+    semanal: 7,
+    quinzenal: 15,
+    personalizado: intervaloPersonalizadoDias ?? 0,
+  }[periodicidade];
+
+  if (diasPorParcela <= 0) {
+    throw new Error("Intervalo personalizado invalido");
+  }
+
+  return (diasPorParcela * qtdParcelas) / DAYS_PER_BILLING_MONTH;
+}
+
+function calcularTotalComJurosMensal({
+  valorTotal,
+  jurosPercentual,
+  periodicidade,
+  intervaloPersonalizadoDias,
+  qtdParcelas,
+}: {
+  valorTotal: number;
+  jurosPercentual: number;
+  periodicidade: PeriodicidadeVencimento;
+  intervaloPersonalizadoDias: number | null;
+  qtdParcelas: number;
+}) {
+  const prazoEmMeses = getPrazoEmMeses({
+    periodicidade,
+    intervaloPersonalizadoDias,
+    qtdParcelas,
+  });
+  const juros = valorTotal * (jurosPercentual / 100) * prazoEmMeses;
+
+  return valorTotal + juros;
+}
+
 export function buildParcelas({
   emprestimoId,
   valorTotal,
@@ -200,7 +250,14 @@ export function buildParcelas({
   periodicidade,
   intervaloPersonalizadoDias,
 }: InstallmentInput): ParcelaInsert[] {
-  const totalEmCentavos = Math.round(valorTotal * (1 + jurosPercentual / 100) * 100);
+  const totalComJuros = calcularTotalComJurosMensal({
+    valorTotal,
+    jurosPercentual,
+    periodicidade,
+    intervaloPersonalizadoDias,
+    qtdParcelas,
+  });
+  const totalEmCentavos = Math.round(totalComJuros * 100);
   const baseParcela = Math.floor(totalEmCentavos / qtdParcelas);
   const resto = totalEmCentavos % qtdParcelas;
 

@@ -2,7 +2,6 @@ import { diasAtraso, formatDateOnly } from "@/lib/loan-utils";
 import type { PeriodicidadeVencimento } from "@/lib/loan-utils";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { AuthPanel, SignOutButton } from "./components/AuthPanel";
-import { InstallPwaButton } from "./components/InstallPwaButton";
 import { NovoEmprestimoModal } from "./components/NovoEmprestimoModal";
 import { MarcarPagoButton } from "./components/MarcarPagoButton";
 import { RegistrarPagamentoForm } from "./components/RegistrarPagamentoForm";
@@ -664,8 +663,7 @@ export default async function Home({ searchParams }: PageProps) {
               {userEmail} • {abertas.length} em aberto • {atrasadas.length} atrasada(s)
             </p>
           </div>
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            <InstallPwaButton />
+          <div className="flex flex-col gap-2 sm:flex-row">
             <NovoEmprestimoModal />
             <SignOutButton />
           </div>

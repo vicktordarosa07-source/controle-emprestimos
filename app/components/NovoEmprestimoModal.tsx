@@ -90,7 +90,7 @@ export function NovoEmprestimoModal() {
 
                 <div>
                   <label className="block text-sm font-medium mb-1">
-                    Juros (%)
+                    Juros ao mês (%)
                   </label>
                   <input
                     name="juros"
