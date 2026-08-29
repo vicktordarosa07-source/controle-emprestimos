@@ -1,4 +1,5 @@
 import { diasAtraso, formatDateOnly } from "@/lib/loan-utils";
+import type { PeriodicidadeVencimento } from "@/lib/loan-utils";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { AuthPanel, SignOutButton } from "./components/AuthPanel";
 import { NovoEmprestimoModal } from "./components/NovoEmprestimoModal";
@@ -22,6 +23,8 @@ type ParcelaComCliente = {
   emprestimo_id: string;
   emprestimos: {
     id: string;
+    periodicidade_vencimento: PeriodicidadeVencimento | null;
+    intervalo_personalizado_dias: number | null;
     clientes: { id: string; nome: string } | null;
   } | null;
 };
@@ -77,6 +80,21 @@ function getValorPago(parcela: ParcelaComCliente) {
 
 function getSaldoParcela(parcela: ParcelaComCliente) {
   return Math.max(Number(parcela.valor) - getValorPago(parcela), 0);
+}
+
+function getPeriodicidadeLabel(parcela: ParcelaComCliente) {
+  const periodicidade = parcela.emprestimos?.periodicidade_vencimento ?? "mensal";
+  const intervalo = parcela.emprestimos?.intervalo_personalizado_dias;
+
+  if (periodicidade === "personalizado") {
+    return intervalo ? `A cada ${intervalo} dias` : "Personalizado";
+  }
+
+  return {
+    semanal: "Semanal",
+    quinzenal: "Quinzenal",
+    mensal: "Mensal",
+  }[periodicidade];
 }
 
 function sumSaldoRestante(parcelas: ParcelaComCliente[]) {
@@ -273,6 +291,9 @@ function ParcelaCard({
             <p className="mt-1 text-sm text-gray-600">
               Parcela {parcela.numero} de {parcela.emprestimo_id.slice(0, 8)}
             </p>
+            <p className="mt-1 text-xs font-semibold uppercase tracking-wide text-gray-500">
+              {getPeriodicidadeLabel(parcela)}
+            </p>
           </div>
           <strong className="shrink-0 bg-gray-100 px-2.5 py-1 text-xs font-bold text-gray-800">
             {formatCurrency(saldo)}
@@ -391,6 +412,9 @@ function ClienteCard({ cliente }: { cliente: ClienteResumo }) {
               {formatCurrency(getSaldoParcela(proximaParcela))} •{" "}
               vence {formatDate(proximaParcela.data_vencimento)}
             </p>
+            <p className="mt-1 text-xs font-semibold text-gray-500">
+              Vencimento {getPeriodicidadeLabel(proximaParcela)}
+            </p>
             {getValorPago(proximaParcela) > 0 ? (
               <p className="mt-1 text-xs font-semibold text-blue-700">
                 Já pago nesta parcela: {formatCurrency(getValorPago(proximaParcela))}
@@ -473,6 +497,7 @@ function ParcelasSection({
                   <th className="px-4 py-3">Cliente</th>
                   <th className="px-4 py-3">Parcela</th>
                   <th className="px-4 py-3">Vencimento</th>
+                  <th className="px-4 py-3">Periodicidade</th>
                   <th className="px-4 py-3 text-right">Valor</th>
                   <th className="px-4 py-3 text-right">Pago</th>
                   <th className="px-4 py-3 text-right">Falta</th>
@@ -497,6 +522,9 @@ function ParcelasSection({
                       </td>
                       <td className="px-4 py-3 font-semibold text-gray-900">
                         {formatDate(parcela.data_vencimento)}
+                      </td>
+                      <td className="px-4 py-3 text-gray-700">
+                        {getPeriodicidadeLabel(parcela)}
                       </td>
                       <td className="px-4 py-3 text-right font-semibold text-gray-900">
                         {formatCurrency(parcela.valor)}
@@ -592,6 +620,8 @@ export default async function Home({ searchParams }: PageProps) {
         emprestimo_id,
         emprestimos (
           id,
+          periodicidade_vencimento,
+          intervalo_personalizado_dias,
           clientes (
             id,
             nome

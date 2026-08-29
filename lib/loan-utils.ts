@@ -1,9 +1,17 @@
+export type PeriodicidadeVencimento =
+  | "semanal"
+  | "quinzenal"
+  | "mensal"
+  | "personalizado";
+
 export type InstallmentInput = {
   emprestimoId: string;
   valorTotal: number;
   jurosPercentual: number;
   qtdParcelas: number;
   dataPrimeiroVencimento: string;
+  periodicidade: PeriodicidadeVencimento;
+  intervaloPersonalizadoDias: number | null;
 };
 
 export type ParcelaInsert = {
@@ -73,6 +81,44 @@ export function parseInstallmentCount(value: FormDataEntryValue | null) {
   return parsed;
 }
 
+export function parseDueFrequency(value: FormDataEntryValue | null) {
+  const raw = parseRequiredText(value, "Vencimento");
+
+  if (
+    raw !== "semanal" &&
+    raw !== "quinzenal" &&
+    raw !== "mensal" &&
+    raw !== "personalizado"
+  ) {
+    throw new Error("Vencimento deve ser semanal, quinzenal, mensal ou personalizado");
+  }
+
+  return raw;
+}
+
+export function parseCustomIntervalDays(
+  value: FormDataEntryValue | null,
+  periodicidade: PeriodicidadeVencimento
+) {
+  if (periodicidade !== "personalizado") {
+    return null;
+  }
+
+  const raw = parseRequiredText(value, "Intervalo personalizado");
+
+  if (!/^\d+$/.test(raw)) {
+    throw new Error("Intervalo personalizado deve ser um numero inteiro de dias");
+  }
+
+  const parsed = Number(raw);
+
+  if (!Number.isSafeInteger(parsed) || parsed < 1 || parsed > 365) {
+    throw new Error("Intervalo personalizado deve ficar entre 1 e 365 dias");
+  }
+
+  return parsed;
+}
+
 export function parseDateOnly(value: FormDataEntryValue | null, field: string) {
   const raw = parseRequiredText(value, field);
 
@@ -109,12 +155,50 @@ export function addMonthsPreservingDueDay(dateOnly: string, months: number) {
   );
 }
 
+export function addDays(dateOnly: string, days: number) {
+  const [year, month, day] = dateOnly.split("-").map(Number);
+  const date = new Date(year, month - 1, day, 12);
+  date.setDate(date.getDate() + days);
+
+  return formatDateOnly(date);
+}
+
+function getDataVencimento({
+  dataPrimeiroVencimento,
+  periodicidade,
+  intervaloPersonalizadoDias,
+  index,
+}: {
+  dataPrimeiroVencimento: string;
+  periodicidade: PeriodicidadeVencimento;
+  intervaloPersonalizadoDias: number | null;
+  index: number;
+}) {
+  if (periodicidade === "mensal") {
+    return addMonthsPreservingDueDay(dataPrimeiroVencimento, index);
+  }
+
+  const diasPorParcela = {
+    semanal: 7,
+    quinzenal: 15,
+    personalizado: intervaloPersonalizadoDias ?? 0,
+  }[periodicidade];
+
+  if (diasPorParcela <= 0) {
+    throw new Error("Intervalo personalizado invalido");
+  }
+
+  return addDays(dataPrimeiroVencimento, diasPorParcela * index);
+}
+
 export function buildParcelas({
   emprestimoId,
   valorTotal,
   jurosPercentual,
   qtdParcelas,
   dataPrimeiroVencimento,
+  periodicidade,
+  intervaloPersonalizadoDias,
 }: InstallmentInput): ParcelaInsert[] {
   const totalEmCentavos = Math.round(valorTotal * (1 + jurosPercentual / 100) * 100);
   const baseParcela = Math.floor(totalEmCentavos / qtdParcelas);
@@ -128,7 +212,12 @@ export function buildParcelas({
       numero: index + 1,
       valor: valorCentavos / 100,
       valor_pago: 0,
-      data_vencimento: addMonthsPreservingDueDay(dataPrimeiroVencimento, index),
+      data_vencimento: getDataVencimento({
+        dataPrimeiroVencimento,
+        periodicidade,
+        intervaloPersonalizadoDias,
+        index,
+      }),
       status: "Pendente",
     };
   });

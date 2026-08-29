@@ -16,9 +16,24 @@ alter table public.clientes
 
 alter table public.emprestimos
   alter column cliente_id set not null,
+  add column if not exists periodicidade_vencimento text not null default 'mensal',
+  add column if not exists intervalo_personalizado_dias integer,
   add constraint emprestimos_valor_total_positive check (valor_total > 0),
   add constraint emprestimos_juros_non_negative check (juros_percentual >= 0),
-  add constraint emprestimos_qtd_parcelas_range check (qtd_parcelas between 1 and 120);
+  add constraint emprestimos_qtd_parcelas_range check (qtd_parcelas between 1 and 120),
+  add constraint emprestimos_periodicidade_check check (
+    periodicidade_vencimento in ('semanal', 'quinzenal', 'mensal', 'personalizado')
+  ),
+  add constraint emprestimos_intervalo_personalizado_check check (
+    (
+      periodicidade_vencimento = 'personalizado'
+      and intervalo_personalizado_dias between 1 and 365
+    )
+    or (
+      periodicidade_vencimento <> 'personalizado'
+      and intervalo_personalizado_dias is null
+    )
+  );
 
 alter table public.parcelas
   add column if not exists valor_pago numeric not null default 0;

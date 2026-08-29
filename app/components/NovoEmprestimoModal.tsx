@@ -7,6 +7,7 @@ export function NovoEmprestimoModal() {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [periodicidade, setPeriodicidade] = useState("mensal");
   const formRef = useRef<HTMLFormElement>(null);
 
   async function handleSubmit(formData: FormData) {
@@ -15,6 +16,7 @@ export function NovoEmprestimoModal() {
     try {
       await criarEmprestimo(formData);
       formRef.current?.reset();
+      setPeriodicidade("mensal");
       setOpen(false);
     } catch (e) {
       setError((e as Error).message);
@@ -28,6 +30,7 @@ export function NovoEmprestimoModal() {
       <button
         onClick={() => {
           setError(null);
+          setPeriodicidade("mensal");
           setOpen(true);
         }}
         className="w-full bg-blue-700 px-5 py-3 font-semibold text-white shadow-sm transition hover:bg-blue-800 sm:w-auto"
@@ -127,6 +130,42 @@ export function NovoEmprestimoModal() {
                     className="w-full border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-1">
+                    Vencimento das parcelas
+                  </label>
+                  <select
+                    name="periodicidade_vencimento"
+                    required
+                    value={periodicidade}
+                    onChange={(event) => setPeriodicidade(event.target.value)}
+                    className="w-full border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="semanal">Semanal</option>
+                    <option value="quinzenal">Quinzenal</option>
+                    <option value="mensal">Mensal</option>
+                    <option value="personalizado">Personalizado</option>
+                  </select>
+                </div>
+
+                {periodicidade === "personalizado" ? (
+                  <div>
+                    <label className="block text-sm font-medium mb-1">
+                      Repetir a cada quantos dias
+                    </label>
+                    <input
+                      name="intervalo_personalizado_dias"
+                      type="number"
+                      min="1"
+                      max="365"
+                      step="1"
+                      required
+                      placeholder="Ex: 10"
+                      className="w-full border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                ) : null}
 
                 <div className="flex gap-3 pt-2">
                   <button

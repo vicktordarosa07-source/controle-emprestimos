@@ -3,7 +3,9 @@
 import {
   buildParcelas,
   formatDateOnly,
+  parseCustomIntervalDays,
   parseDateOnly,
+  parseDueFrequency,
   parseInstallmentCount,
   parseNonNegativeNumber,
   parsePositiveNumber,
@@ -36,6 +38,11 @@ export async function criarEmprestimo(formData: FormData) {
     formData.get("data_primeiro_vencimento"),
     "Data do primeiro vencimento"
   );
+  const periodicidade = parseDueFrequency(formData.get("periodicidade_vencimento"));
+  const intervaloPersonalizadoDias = parseCustomIntervalDays(
+    formData.get("intervalo_personalizado_dias"),
+    periodicidade
+  );
 
   // 1. Cria cliente
   const { data: cliente, error: clienteError } = await supabase
@@ -57,6 +64,8 @@ export async function criarEmprestimo(formData: FormData) {
       juros_percentual: jurosPercentual,
       qtd_parcelas: qtdParcelas,
       data_primeiro_vencimento: dataPrimeiroVencimento,
+      periodicidade_vencimento: periodicidade,
+      intervalo_personalizado_dias: intervaloPersonalizadoDias,
     })
     .select()
     .single();
@@ -72,6 +81,8 @@ export async function criarEmprestimo(formData: FormData) {
     jurosPercentual,
     qtdParcelas,
     dataPrimeiroVencimento,
+    periodicidade,
+    intervaloPersonalizadoDias,
   });
 
   const { error: parcelasError } = await supabase
