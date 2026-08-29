@@ -27,6 +27,7 @@ type ClienteResumo = {
   clienteId: string;
   nome: string;
   parcelas: ParcelaComCliente[];
+  proximaParcela: ParcelaComCliente | null;
   totalRestante: number;
   totalAtrasado: number;
   atrasadas: number;
@@ -92,6 +93,7 @@ function agruparPorCliente(parcelas: ParcelaComCliente[], hojeStr: string) {
         clienteId,
         nome: getNomeCliente(parcelasDoCliente[0]),
         parcelas: abertas,
+        proximaParcela: proximas[0] ?? null,
         totalRestante: sumParcelas(abertas),
         totalAtrasado: sumParcelas(atrasadas),
         atrasadas: atrasadas.length,
@@ -261,6 +263,8 @@ function ParcelaCard({
 }
 
 function ClienteCard({ cliente }: { cliente: ClienteResumo }) {
+  const proximaParcela = cliente.proximaParcela;
+
   return (
     <article className="border border-gray-200 bg-white p-5 shadow-sm">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -307,6 +311,24 @@ function ClienteCard({ cliente }: { cliente: ClienteResumo }) {
           </p>
         </div>
       </div>
+
+      {proximaParcela ? (
+        <div className="mt-5 flex flex-col gap-3 border-t border-gray-200 pt-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-wide text-gray-500">
+              Próxima parcela
+            </p>
+            <p className="mt-1 text-sm font-bold text-gray-950">
+              Parcela {proximaParcela.numero} • {formatCurrency(proximaParcela.valor)} •{" "}
+              {formatDate(proximaParcela.data_vencimento)}
+            </p>
+          </div>
+          <MarcarPagoButton
+            parcelaId={proximaParcela.id}
+            status={proximaParcela.status}
+          />
+        </div>
+      ) : null}
     </article>
   );
 }
