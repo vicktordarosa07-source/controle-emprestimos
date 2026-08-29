@@ -46,19 +46,21 @@ drop policy if exists "clientes por usuario" on public.clientes;
 create policy "clientes por usuario"
 on public.clientes
 for all
-using (user_id = auth.uid())
-with check (user_id = auth.uid());
+to authenticated
+using (user_id = (select auth.uid()))
+with check (user_id = (select auth.uid()));
 
 drop policy if exists "emprestimos por usuario" on public.emprestimos;
 create policy "emprestimos por usuario"
 on public.emprestimos
 for all
+to authenticated
 using (
   exists (
     select 1
     from public.clientes c
     where c.id = emprestimos.cliente_id
-      and c.user_id = auth.uid()
+      and c.user_id = (select auth.uid())
   )
 )
 with check (
@@ -66,7 +68,7 @@ with check (
     select 1
     from public.clientes c
     where c.id = emprestimos.cliente_id
-      and c.user_id = auth.uid()
+      and c.user_id = (select auth.uid())
   )
 );
 
@@ -74,13 +76,14 @@ drop policy if exists "parcelas por usuario" on public.parcelas;
 create policy "parcelas por usuario"
 on public.parcelas
 for all
+to authenticated
 using (
   exists (
     select 1
     from public.emprestimos e
     join public.clientes c on c.id = e.cliente_id
     where e.id = parcelas.emprestimo_id
-      and c.user_id = auth.uid()
+      and c.user_id = (select auth.uid())
   )
 )
 with check (
@@ -89,6 +92,6 @@ with check (
     from public.emprestimos e
     join public.clientes c on c.id = e.cliente_id
     where e.id = parcelas.emprestimo_id
-      and c.user_id = auth.uid()
+      and c.user_id = (select auth.uid())
   )
 );
