@@ -1,19 +1,23 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { criarEmprestimo } from "@/app/actions";
 
 export function NovoEmprestimoModal() {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const formRef = useRef<HTMLFormElement>(null);
 
   async function handleSubmit(formData: FormData) {
     setLoading(true);
+    setError(null);
     try {
       await criarEmprestimo(formData);
+      formRef.current?.reset();
       setOpen(false);
     } catch (e) {
-      alert((e as Error).message);
+      setError((e as Error).message);
     } finally {
       setLoading(false);
     }
@@ -22,15 +26,18 @@ export function NovoEmprestimoModal() {
   return (
     <>
       <button
-        onClick={() => setOpen(true)}
-        className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white font-semibold px-6 py-3 rounded-lg shadow transition"
+        onClick={() => {
+          setError(null);
+          setOpen(true);
+        }}
+        className="w-full bg-blue-700 px-5 py-3 font-semibold text-white shadow-sm transition hover:bg-blue-800 sm:w-auto"
       >
         + Novo Empréstimo
       </button>
 
       {open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md max-h-[90vh] overflow-auto">
+          <div className="max-h-[90vh] w-full max-w-md overflow-auto bg-white shadow-xl">
             <div className="p-6">
               <div className="flex justify-between items-center mb-4">
                 <h2 className="text-lg font-bold">Novo Empréstimo</h2>
@@ -43,7 +50,13 @@ export function NovoEmprestimoModal() {
                 </button>
               </div>
 
-              <form action={handleSubmit} className="space-y-4">
+              <form ref={formRef} action={handleSubmit} className="space-y-4">
+                {error ? (
+                  <div className="border border-red-200 bg-red-50 p-3 text-sm font-medium text-red-700">
+                    {error}
+                  </div>
+                ) : null}
+
                 <div>
                   <label className="block text-sm font-medium mb-1">
                     Nome do cliente
@@ -51,8 +64,9 @@ export function NovoEmprestimoModal() {
                   <input
                     name="nome"
                     required
+                    maxLength={120}
                     placeholder="Ex: João Silva"
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
 
@@ -64,10 +78,10 @@ export function NovoEmprestimoModal() {
                     name="valor"
                     type="number"
                     step="0.01"
-                    min="0"
+                    min="0.01"
                     required
                     placeholder="Ex: 1000"
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
 
@@ -82,7 +96,7 @@ export function NovoEmprestimoModal() {
                     min="0"
                     required
                     placeholder="Ex: 10"
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
 
@@ -94,10 +108,11 @@ export function NovoEmprestimoModal() {
                     name="qtd_parcelas"
                     type="number"
                     min="1"
+                    max="120"
                     step="1"
                     required
                     placeholder="Ex: 12"
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
 
@@ -109,7 +124,7 @@ export function NovoEmprestimoModal() {
                     name="data_primeiro_vencimento"
                     type="date"
                     required
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
 
@@ -117,14 +132,14 @@ export function NovoEmprestimoModal() {
                   <button
                     type="button"
                     onClick={() => setOpen(false)}
-                    className="flex-1 border border-gray-300 rounded-lg py-2 font-medium hover:bg-gray-50"
+                    className="flex-1 border border-gray-300 py-2 text-sm font-medium hover:bg-gray-50"
                   >
                     Cancelar
                   </button>
                   <button
                     type="submit"
                     disabled={loading}
-                    className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg py-2 font-semibold"
+                    className="flex-1 bg-blue-700 py-2 text-sm font-semibold text-white hover:bg-blue-800 disabled:opacity-50"
                   >
                     {loading ? "Salvando..." : "Salvar"}
                   </button>

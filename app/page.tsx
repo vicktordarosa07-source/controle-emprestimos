@@ -1,20 +1,40 @@
-import { supabase } from "@/lib/supabase";
+import { diasAtraso, formatDateOnly } from "@/lib/loan-utils";
+import { createSupabaseServerClient } from "@/lib/supabase-server";
+import { AuthPanel, SignOutButton } from "./components/AuthPanel";
 import { NovoEmprestimoModal } from "./components/NovoEmprestimoModal";
 import { MarcarPagoButton } from "./components/MarcarPagoButton";
 
 export const dynamic = "force-dynamic";
+
+type ParcelaStatus = "Pendente" | "Pago" | string;
+type ViewFilter = "abertas" | "atrasadas" | "pagas" | "todas";
 
 type ParcelaComCliente = {
   id: string;
   numero: number;
   valor: number;
   data_vencimento: string;
-  status: string;
+  data_pagamento: string | null;
+  status: ParcelaStatus;
   emprestimo_id: string;
   emprestimos: {
     id: string;
     clientes: { nome: string } | null;
   } | null;
+};
+
+type PageProps = {
+  searchParams?: Promise<{
+    q?: string;
+    view?: string;
+  }>;
+};
+
+const viewLabels: Record<ViewFilter, string> = {
+  abertas: "Em aberto",
+  atrasadas: "Atrasadas",
+  pagas: "Pagas",
+  todas: "Todas",
 };
 
 function formatCurrency(value: number) {
@@ -25,197 +45,380 @@ function formatCurrency(value: number) {
 }
 
 function formatDate(dateStr: string) {
-  const d = new Date(dateStr + "T12:00:00");
-  return d.toLocaleDateString("pt-BR");
+  return new Date(`${dateStr}T12:00:00`).toLocaleDateString("pt-BR");
 }
 
-function calcularDiasAtraso(dataVencimento: string, hoje: Date) {
-  const venc = new Date(dataVencimento + "T12:00:00");
-  const hojeZerado = new Date(hoje);
-  hojeZerado.setHours(12, 0, 0, 0);
-  venc.setHours(12, 0, 0, 0);
-  const diffMs = hojeZerado.getTime() - venc.getTime();
-  const diffDias = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-  return diffDias;
+function getNomeCliente(parcela: ParcelaComCliente) {
+  return parcela.emprestimos?.clientes?.nome ?? "Cliente sem nome";
 }
 
-export default async function Home() {
-  const hoje = new Date();
-  const yyyy = hoje.getFullYear();
-  const mm = String(hoje.getMonth() + 1).padStart(2, "0");
-  const dd = String(hoje.getDate()).padStart(2, "0");
-  const hojeStr = `${yyyy}-${mm}-${dd}`;
+function sumParcelas(parcelas: ParcelaComCliente[]) {
+  return parcelas.reduce((total, parcela) => total + Number(parcela.valor), 0);
+}
 
-  // Busca parcelas pendentes com join para nome do cliente
-  const { data, error } = await supabase
-    .from("parcelas")
-    .select(
-      `
-      id,
-      numero,
-      valor,
-      data_vencimento,
-      status,
-      emprestimo_id,
-      emprestimos (
-        id,
-        clientes (
-          nome
-        )
-      )
-    `
-    )
-    .eq("status", "Pendente")
-    .order("data_vencimento", { ascending: true });
-
-  // Fallback: se a query com join falhar por relação, tenta sem join e busca clientes depois
-  let parcelas: ParcelaComCliente[] = [];
-  let fetchError: string | null = null;
-
-  if (error) {
-    fetchError = error.message;
-    // tenta query simples sem join
-    const { data: simples, error: err2 } = await supabase
-      .from("parcelas")
-      .select("*")
-      .eq("status", "Pendente")
-      .order("data_vencimento", { ascending: true });
-    if (!err2 && simples) {
-      parcelas = (simples as unknown as ParcelaComCliente[]).map((p) => ({
-        ...p,
-        emprestimos: null,
-      }));
-      fetchError = null;
-    }
-  } else {
-    parcelas = (data as unknown as ParcelaComCliente[]) || [];
+function normalizeView(value: string | undefined): ViewFilter {
+  if (value === "atrasadas" || value === "pagas" || value === "todas") {
+    return value;
   }
 
-  const atrasadas = parcelas.filter((p) => p.data_vencimento < hojeStr);
-  const aVencer = parcelas.filter((p) => p.data_vencimento >= hojeStr);
+  return "abertas";
+}
 
-  function ParcelaCard({ p }: { p: ParcelaComCliente }) {
-    const nomeCliente = p.emprestimos?.clientes?.nome ?? "Cliente";
-    const diasAtraso = calcularDiasAtraso(p.data_vencimento, hoje);
-    const isAtrasada = p.data_vencimento < hojeStr;
+function buildHref(view: ViewFilter, q: string) {
+  const params = new URLSearchParams();
+  params.set("view", view);
 
-    return (
-      <div
-        key={p.id}
-        className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm flex flex-col gap-3"
-      >
-        <div className="flex justify-between items-start gap-2">
-          <div className="min-w-0">
-            <p className="font-semibold text-gray-900 truncate">{nomeCliente}</p>
-            <p className="text-sm text-gray-500">
-              Parcela {p.numero} • Vencimento: {formatDate(p.data_vencimento)}
-            </p>
-          </div>
-          <span className="shrink-0 bg-gray-100 text-gray-700 text-xs font-medium px-2.5 py-1 rounded-full">
-            {formatCurrency(p.valor)}
-          </span>
-        </div>
-
-        {isAtrasada && (
-          <p className="text-sm font-semibold text-red-600">
-            {diasAtraso} {diasAtraso === 1 ? "dia" : "dias"} de atraso
-          </p>
-        )}
-
-        <MarcarPagoButton parcelaId={p.id} />
-      </div>
-    );
+  if (q) {
+    params.set("q", q);
   }
+
+  return `/?${params.toString()}`;
+}
+
+function SummaryCard({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: string;
+  tone: "red" | "green" | "blue" | "gray";
+}) {
+  const toneClass = {
+    red: "text-red-700",
+    green: "text-emerald-700",
+    blue: "text-blue-700",
+    gray: "text-gray-900",
+  }[tone];
 
   return (
-    <main className="min-h-screen">
-      {/* Header */}
-      <header className="bg-white border-b border-gray-200 sticky top-0 z-40">
-        <div className="max-w-5xl mx-auto px-4 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          <div>
-            <h1 className="text-xl sm:text-2xl font-bold text-gray-900">
-              Controle de Empréstimos
-            </h1>
-            <p className="text-sm text-gray-500">
-              Filipe de Lima • {parcelas.length} parcela(s) pendente(s)
+    <div className="border border-gray-200 bg-white p-4 shadow-sm">
+      <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+        {label}
+      </p>
+      <p className={`mt-2 text-2xl font-bold ${toneClass}`}>{value}</p>
+    </div>
+  );
+}
+
+function FilterLink({
+  view,
+  activeView,
+  q,
+  count,
+}: {
+  view: ViewFilter;
+  activeView: ViewFilter;
+  q: string;
+  count: number;
+}) {
+  const active = view === activeView;
+
+  return (
+    <a
+      href={buildHref(view, q)}
+      className={
+        active
+          ? "border border-blue-700 bg-blue-700 px-3 py-2 text-sm font-semibold text-white"
+          : "border border-gray-300 bg-white px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+      }
+    >
+      {viewLabels[view]} ({count})
+    </a>
+  );
+}
+
+function ParcelaCard({
+  parcela,
+  hoje,
+  hojeStr,
+}: {
+  parcela: ParcelaComCliente;
+  hoje: Date;
+  hojeStr: string;
+}) {
+  const nomeCliente = getNomeCliente(parcela);
+  const isPaga = parcela.status === "Pago";
+  const isAtrasada = !isPaga && parcela.data_vencimento < hojeStr;
+  const atraso = diasAtraso(parcela.data_vencimento, hoje);
+
+  return (
+    <article className="flex min-h-44 flex-col justify-between gap-4 border border-gray-200 bg-white p-4 shadow-sm">
+      <div className="space-y-3">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h3 className="truncate text-base font-bold text-gray-950">
+              {nomeCliente}
+            </h3>
+            <p className="mt-1 text-sm text-gray-600">
+              Parcela {parcela.numero} de {parcela.emprestimo_id.slice(0, 8)}
             </p>
           </div>
-          <NovoEmprestimoModal />
+          <strong className="shrink-0 bg-gray-100 px-2.5 py-1 text-xs font-bold text-gray-800">
+            {formatCurrency(parcela.valor)}
+          </strong>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3 text-sm">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+              Vencimento
+            </p>
+            <p className="mt-1 font-semibold text-gray-900">
+              {formatDate(parcela.data_vencimento)}
+            </p>
+          </div>
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+              Status
+            </p>
+            <p
+              className={
+                isPaga
+                  ? "mt-1 font-semibold text-emerald-700"
+                  : isAtrasada
+                    ? "mt-1 font-semibold text-red-700"
+                    : "mt-1 font-semibold text-blue-700"
+              }
+            >
+              {isPaga ? "Pago" : isAtrasada ? "Atrasada" : "A vencer"}
+            </p>
+          </div>
+        </div>
+
+        {isAtrasada ? (
+          <p className="border-l-4 border-red-600 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">
+            {atraso} {atraso === 1 ? "dia" : "dias"} de atraso
+          </p>
+        ) : null}
+
+        {isPaga && parcela.data_pagamento ? (
+          <p className="border-l-4 border-emerald-600 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700">
+            Pago em {formatDate(parcela.data_pagamento)}
+          </p>
+        ) : null}
+      </div>
+
+      <MarcarPagoButton parcelaId={parcela.id} status={parcela.status} />
+    </article>
+  );
+}
+
+function ParcelasSection({
+  title,
+  parcelas,
+  hoje,
+  hojeStr,
+}: {
+  title: string;
+  parcelas: ParcelaComCliente[];
+  hoje: Date;
+  hojeStr: string;
+}) {
+  return (
+    <section className="space-y-3">
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-lg font-bold text-gray-950">{title}</h2>
+        <span className="text-sm font-semibold text-gray-500">
+          {parcelas.length} parcela(s)
+        </span>
+      </div>
+
+      {parcelas.length === 0 ? (
+        <div className="border border-dashed border-gray-300 bg-white p-6 text-center text-sm font-medium text-gray-500">
+          Nenhuma parcela nesta visão.
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {parcelas.map((parcela) => (
+            <ParcelaCard
+              key={parcela.id}
+              parcela={parcela}
+              hoje={hoje}
+              hojeStr={hojeStr}
+            />
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+export default async function Home({ searchParams }: PageProps) {
+  const params = (await searchParams) ?? {};
+  const q = (params.q ?? "").trim();
+  const normalizedQuery = q.toLocaleLowerCase("pt-BR");
+  const activeView = normalizeView(params.view);
+  const hoje = new Date();
+  const hojeStr = formatDateOnly(hoje);
+  let parcelas: ParcelaComCliente[] = [];
+  let fetchError: string | null = null;
+  let userEmail = "";
+
+  try {
+    const supabase = await createSupabaseServerClient();
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
+
+    if (userError || !user) {
+      return <AuthPanel />;
+    }
+
+    userEmail = user.email ?? "";
+
+    const { data, error } = await supabase
+      .from("parcelas")
+      .select(
+        `
+        id,
+        numero,
+        valor,
+        data_vencimento,
+        data_pagamento,
+        status,
+        emprestimo_id,
+        emprestimos (
+          id,
+          clientes (
+            nome
+          )
+        )
+      `
+      )
+      .order("data_vencimento", { ascending: true });
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    parcelas = (data as unknown as ParcelaComCliente[]) || [];
+  } catch (error) {
+    fetchError = (error as Error).message;
+  }
+
+  const filtradasPorBusca = normalizedQuery
+    ? parcelas.filter((parcela) =>
+        getNomeCliente(parcela).toLocaleLowerCase("pt-BR").includes(normalizedQuery)
+      )
+    : parcelas;
+
+  const pagas = filtradasPorBusca.filter((parcela) => parcela.status === "Pago");
+  const abertas = filtradasPorBusca.filter((parcela) => parcela.status !== "Pago");
+  const atrasadas = abertas.filter((parcela) => parcela.data_vencimento < hojeStr);
+  const aVencer = abertas.filter((parcela) => parcela.data_vencimento >= hojeStr);
+  const pagasRecentes = [...pagas]
+    .sort((a, b) => (b.data_pagamento ?? "").localeCompare(a.data_pagamento ?? ""))
+    .slice(0, 12);
+
+  const visibleParcelas = {
+    abertas,
+    atrasadas,
+    pagas,
+    todas: filtradasPorBusca,
+  }[activeView];
+
+  return (
+    <main className="min-h-screen bg-gray-50">
+      <header className="sticky top-0 z-40 border-b border-gray-200 bg-white">
+        <div className="mx-auto flex max-w-6xl flex-col gap-4 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h1 className="text-xl font-bold text-gray-950 sm:text-2xl">
+              Controle de Empréstimos
+            </h1>
+            <p className="text-sm font-medium text-gray-500">
+              {userEmail} • {abertas.length} em aberto • {atrasadas.length} atrasada(s)
+            </p>
+          </div>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <NovoEmprestimoModal />
+            <SignOutButton />
+          </div>
         </div>
       </header>
 
-      <div className="max-w-5xl mx-auto px-4 py-6 space-y-8">
-        {fetchError && (
-          <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg p-4 text-sm">
-            Erro ao carregar parcelas: {fetchError}
+      <div className="mx-auto max-w-6xl space-y-6 px-4 py-6">
+        {fetchError ? (
+          <div className="border border-red-200 bg-red-50 p-4 text-sm font-medium text-red-700">
+            Erro ao carregar dados: {fetchError}
           </div>
-        )}
+        ) : null}
 
-        {/* Resumo rápido */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          <div className="bg-white border border-gray-200 rounded-xl p-4">
-            <p className="text-xs text-gray-500 uppercase tracking-wide">
-              Atrasadas
-            </p>
-            <p className="text-2xl font-bold text-red-600">{atrasadas.length}</p>
-          </div>
-          <div className="bg-white border border-gray-200 rounded-xl p-4">
-            <p className="text-xs text-gray-500 uppercase tracking-wide">
-              A Vencer
-            </p>
-            <p className="text-2xl font-bold text-green-600">{aVencer.length}</p>
-          </div>
-          <div className="bg-white border border-gray-200 rounded-xl p-4 col-span-2 sm:col-span-1">
-            <p className="text-xs text-gray-500 uppercase tracking-wide">Total pendente</p>
-            <p className="text-2xl font-bold text-gray-900">{parcelas.length}</p>
-          </div>
-        </div>
-
-        {/* Atrasadas */}
-        <section>
-          <h2 className="text-lg font-bold text-gray-900 mb-3 flex items-center gap-2">
-            <span className="w-2 h-6 bg-red-600 rounded-full inline-block" />
-            Atrasadas
-            <span className="bg-red-100 text-red-700 text-xs font-semibold px-2 py-1 rounded-full">
-              {atrasadas.length}
-            </span>
-          </h2>
-
-          {atrasadas.length === 0 ? (
-            <div className="bg-white border border-dashed border-gray-300 rounded-xl p-6 text-center text-gray-500 text-sm">
-              Nenhuma parcela atrasada 🎉
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {atrasadas.map((p) => (
-                <ParcelaCard key={p.id} p={p} />
-              ))}
-            </div>
-          )}
+        <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <SummaryCard
+            label="Total a receber"
+            value={formatCurrency(sumParcelas(abertas))}
+            tone="blue"
+          />
+          <SummaryCard
+            label="Atrasado"
+            value={formatCurrency(sumParcelas(atrasadas))}
+            tone="red"
+          />
+          <SummaryCard
+            label="A vencer"
+            value={formatCurrency(sumParcelas(aVencer))}
+            tone="green"
+          />
+          <SummaryCard
+            label="Recebido"
+            value={formatCurrency(sumParcelas(pagas))}
+            tone="gray"
+          />
         </section>
 
-        {/* A Vencer */}
-        <section>
-          <h2 className="text-lg font-bold text-gray-900 mb-3 flex items-center gap-2">
-            <span className="w-2 h-6 bg-green-600 rounded-full inline-block" />
-            A Vencer
-            <span className="bg-green-100 text-green-700 text-xs font-semibold px-2 py-1 rounded-full">
-              {aVencer.length}
-            </span>
-          </h2>
+        <section className="space-y-3 border border-gray-200 bg-white p-4 shadow-sm">
+          <form className="flex flex-col gap-3 md:flex-row" action="/">
+            <input type="hidden" name="view" value={activeView} />
+            <label className="sr-only" htmlFor="search-client">
+              Buscar cliente
+            </label>
+            <input
+              id="search-client"
+              name="q"
+              defaultValue={q}
+              placeholder="Buscar por cliente"
+              className="min-h-11 flex-1 border border-gray-300 px-3 text-sm font-medium outline-none focus:border-blue-700 focus:ring-2 focus:ring-blue-100"
+            />
+            <button className="min-h-11 border border-blue-700 bg-blue-700 px-5 text-sm font-bold text-white hover:bg-blue-800">
+              Buscar
+            </button>
+          </form>
 
-          {aVencer.length === 0 ? (
-            <div className="bg-white border border-dashed border-gray-300 rounded-xl p-6 text-center text-gray-500 text-sm">
-              Nenhuma parcela a vencer
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {aVencer.map((p) => (
-                <ParcelaCard key={p.id} p={p} />
-              ))}
-            </div>
-          )}
+          <div className="flex flex-wrap gap-2">
+            <FilterLink view="abertas" activeView={activeView} q={q} count={abertas.length} />
+            <FilterLink
+              view="atrasadas"
+              activeView={activeView}
+              q={q}
+              count={atrasadas.length}
+            />
+            <FilterLink view="pagas" activeView={activeView} q={q} count={pagas.length} />
+            <FilterLink
+              view="todas"
+              activeView={activeView}
+              q={q}
+              count={filtradasPorBusca.length}
+            />
+          </div>
         </section>
+
+        <ParcelasSection
+          title={viewLabels[activeView]}
+          parcelas={visibleParcelas}
+          hoje={hoje}
+          hojeStr={hojeStr}
+        />
+
+        {activeView !== "pagas" && pagasRecentes.length > 0 ? (
+          <ParcelasSection
+            title="Pagas recentemente"
+            parcelas={pagasRecentes}
+            hoje={hoje}
+            hojeStr={hojeStr}
+          />
+        ) : null}
       </div>
     </main>
   );
