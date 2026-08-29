@@ -9,6 +9,7 @@ export const dynamic = "force-dynamic";
 
 type ParcelaStatus = "Pendente" | "Pago" | string;
 type ViewFilter = "abertas" | "atrasadas" | "pagas" | "todas";
+type MainTab = "clientes" | "parcelas";
 
 type ParcelaComCliente = {
   id: string;
@@ -39,6 +40,7 @@ type ClienteResumo = {
 type PageProps = {
   searchParams?: Promise<{
     q?: string;
+    tab?: string;
     view?: string;
   }>;
 };
@@ -136,8 +138,21 @@ function normalizeView(value: string | undefined): ViewFilter {
   return "abertas";
 }
 
-function buildHref(view: ViewFilter, q: string) {
+function normalizeTab(value: string | undefined): MainTab {
+  return value === "parcelas" ? "parcelas" : "clientes";
+}
+
+function buildHref({
+  tab,
+  view,
+  q,
+}: {
+  tab: MainTab;
+  view: ViewFilter;
+  q: string;
+}) {
   const params = new URLSearchParams();
+  params.set("tab", tab);
   params.set("view", view);
 
   if (q) {
@@ -145,6 +160,35 @@ function buildHref(view: ViewFilter, q: string) {
   }
 
   return `/?${params.toString()}`;
+}
+
+function TabLink({
+  tab,
+  activeTab,
+  q,
+  view,
+  label,
+}: {
+  tab: MainTab;
+  activeTab: MainTab;
+  q: string;
+  view: ViewFilter;
+  label: string;
+}) {
+  const active = tab === activeTab;
+
+  return (
+    <a
+      href={buildHref({ tab, view, q })}
+      className={
+        active
+          ? "border border-gray-950 bg-gray-950 px-4 py-2 text-sm font-bold text-white"
+          : "border border-gray-300 bg-white px-4 py-2 text-sm font-bold text-gray-700 hover:bg-gray-50"
+      }
+    >
+      {label}
+    </a>
+  );
 }
 
 function SummaryCard({
@@ -176,11 +220,13 @@ function SummaryCard({
 function FilterLink({
   view,
   activeView,
+  activeTab,
   q,
   count,
 }: {
   view: ViewFilter;
   activeView: ViewFilter;
+  activeTab: MainTab;
   q: string;
   count: number;
 }) {
@@ -188,7 +234,7 @@ function FilterLink({
 
   return (
     <a
-      href={buildHref(view, q)}
+      href={buildHref({ tab: activeTab, view, q })}
       className={
         active
           ? "border border-blue-700 bg-blue-700 px-3 py-2 text-sm font-semibold text-white"
@@ -419,16 +465,87 @@ function ParcelasSection({
           Nenhuma parcela nesta visão.
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {parcelas.map((parcela) => (
-            <ParcelaCard
-              key={parcela.id}
-              parcela={parcela}
-              hoje={hoje}
-              hojeStr={hojeStr}
-            />
-          ))}
-        </div>
+        <>
+          <div className="hidden overflow-hidden border border-gray-200 bg-white shadow-sm md:block">
+            <table className="w-full border-collapse text-left text-sm">
+              <thead className="bg-gray-100 text-xs font-bold uppercase tracking-wide text-gray-600">
+                <tr>
+                  <th className="px-4 py-3">Cliente</th>
+                  <th className="px-4 py-3">Parcela</th>
+                  <th className="px-4 py-3">Vencimento</th>
+                  <th className="px-4 py-3 text-right">Valor</th>
+                  <th className="px-4 py-3 text-right">Pago</th>
+                  <th className="px-4 py-3 text-right">Falta</th>
+                  <th className="px-4 py-3">Status</th>
+                  <th className="px-4 py-3">Ação</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200">
+                {parcelas.map((parcela) => {
+                  const saldo = getSaldoParcela(parcela);
+                  const valorPago = getValorPago(parcela);
+                  const isPaga = parcela.status === "Pago";
+                  const isAtrasada = !isPaga && parcela.data_vencimento < hojeStr;
+
+                  return (
+                    <tr key={parcela.id} className="bg-white align-top hover:bg-gray-50">
+                      <td className="px-4 py-3 font-bold text-gray-950">
+                        {getNomeCliente(parcela)}
+                      </td>
+                      <td className="px-4 py-3 text-gray-700">
+                        {parcela.numero}
+                      </td>
+                      <td className="px-4 py-3 font-semibold text-gray-900">
+                        {formatDate(parcela.data_vencimento)}
+                      </td>
+                      <td className="px-4 py-3 text-right font-semibold text-gray-900">
+                        {formatCurrency(parcela.valor)}
+                      </td>
+                      <td className="px-4 py-3 text-right font-semibold text-emerald-700">
+                        {formatCurrency(valorPago)}
+                      </td>
+                      <td className="px-4 py-3 text-right font-bold text-blue-900">
+                        {formatCurrency(saldo)}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span
+                          className={
+                            isPaga
+                              ? "font-bold text-emerald-700"
+                              : isAtrasada
+                                ? "font-bold text-red-700"
+                                : "font-bold text-blue-700"
+                          }
+                        >
+                          {isPaga ? "Pago" : isAtrasada ? "Atrasada" : "A vencer"}
+                        </span>
+                        {isAtrasada ? (
+                          <span className="mt-1 block text-xs font-semibold text-red-700">
+                            {diasAtraso(parcela.data_vencimento, hoje)} dia(s)
+                          </span>
+                        ) : null}
+                      </td>
+                      <td className="px-4 py-3">
+                        <MarcarPagoButton parcelaId={parcela.id} status={parcela.status} />
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 md:hidden">
+            {parcelas.map((parcela) => (
+              <ParcelaCard
+                key={parcela.id}
+                parcela={parcela}
+                hoje={hoje}
+                hojeStr={hojeStr}
+              />
+            ))}
+          </div>
+        </>
       )}
     </section>
   );
@@ -438,7 +555,10 @@ export default async function Home({ searchParams }: PageProps) {
   const params = (await searchParams) ?? {};
   const q = (params.q ?? "").trim();
   const normalizedQuery = q.toLocaleLowerCase("pt-BR");
-  const activeView = normalizeView(params.view);
+  const activeTab = normalizeTab(params.tab);
+  const requestedView = normalizeView(params.view);
+  const activeView =
+    activeTab === "clientes" && requestedView === "pagas" ? "abertas" : requestedView;
   const hoje = new Date();
   const hojeStr = formatDateOnly(hoje);
   let parcelas: ParcelaComCliente[] = [];
@@ -500,9 +620,6 @@ export default async function Home({ searchParams }: PageProps) {
   const abertas = filtradasPorBusca.filter((parcela) => parcela.status !== "Pago");
   const atrasadas = abertas.filter((parcela) => parcela.data_vencimento < hojeStr);
   const aVencer = abertas.filter((parcela) => parcela.data_vencimento >= hojeStr);
-  const pagasRecentes = [...pagas]
-    .sort((a, b) => (b.data_pagamento ?? "").localeCompare(a.data_pagamento ?? ""))
-    .slice(0, 12);
 
   const visibleParcelas = {
     abertas,
@@ -569,6 +686,7 @@ export default async function Home({ searchParams }: PageProps) {
 
         <section className="space-y-3 border border-gray-200 bg-white p-4 shadow-sm">
           <form className="flex flex-col gap-3 md:flex-row" action="/">
+            <input type="hidden" name="tab" value={activeTab} />
             <input type="hidden" name="view" value={activeView} />
             <label className="sr-only" htmlFor="search-client">
               Buscar cliente
@@ -585,25 +703,58 @@ export default async function Home({ searchParams }: PageProps) {
             </button>
           </form>
 
+          <div className="flex flex-wrap gap-2 border-b border-gray-200 pb-3">
+            <TabLink
+              tab="clientes"
+              activeTab={activeTab}
+              q={q}
+              view={activeTab === "clientes" ? activeView : "abertas"}
+              label="Clientes"
+            />
+            <TabLink
+              tab="parcelas"
+              activeTab={activeTab}
+              q={q}
+              view={activeTab === "parcelas" ? activeView : "todas"}
+              label="Parcelas"
+            />
+          </div>
+
           <div className="flex flex-wrap gap-2">
-            <FilterLink view="abertas" activeView={activeView} q={q} count={abertas.length} />
+            <FilterLink
+              view="abertas"
+              activeView={activeView}
+              activeTab={activeTab}
+              q={q}
+              count={abertas.length}
+            />
             <FilterLink
               view="atrasadas"
               activeView={activeView}
+              activeTab={activeTab}
               q={q}
               count={atrasadas.length}
             />
-            <FilterLink view="pagas" activeView={activeView} q={q} count={pagas.length} />
+            {activeTab === "parcelas" ? (
+              <FilterLink
+                view="pagas"
+                activeView={activeView}
+                activeTab={activeTab}
+                q={q}
+                count={pagas.length}
+              />
+            ) : null}
             <FilterLink
               view="todas"
               activeView={activeView}
+              activeTab={activeTab}
               q={q}
               count={filtradasPorBusca.length}
             />
           </div>
         </section>
 
-        {activeView === "pagas" ? (
+        {activeTab === "parcelas" ? (
           <ParcelasSection
             title={viewLabels[activeView]}
             parcelas={visibleParcelas}
@@ -613,15 +764,6 @@ export default async function Home({ searchParams }: PageProps) {
         ) : (
           <ClientesSection title={viewLabels[activeView]} clientes={visibleClientes} />
         )}
-
-        {activeView !== "pagas" && pagasRecentes.length > 0 ? (
-          <ParcelasSection
-            title="Pagas recentemente"
-            parcelas={pagasRecentes}
-            hoje={hoje}
-            hojeStr={hojeStr}
-          />
-        ) : null}
       </div>
     </main>
   );
