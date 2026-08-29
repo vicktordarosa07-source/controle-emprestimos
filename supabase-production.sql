@@ -6,6 +6,63 @@
 alter table public.clientes
   add column if not exists user_id uuid references auth.users(id) on delete cascade;
 
+create table if not exists public.profiles (
+  id uuid primary key references auth.users(id) on delete cascade,
+  email text not null,
+  fone text not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint profiles_email_format_check check (position('@' in email) > 1),
+  constraint profiles_fone_length_check check (
+    char_length(regexp_replace(fone, '[^0-9]', '', 'g')) between 10 and 15
+  )
+);
+
+alter table public.profiles enable row level security;
+
+revoke all on table public.profiles from anon;
+revoke all on table public.profiles from authenticated;
+grant select, update on table public.profiles to authenticated;
+
+drop policy if exists "profiles por usuario" on public.profiles;
+create policy "profiles por usuario"
+on public.profiles
+for all
+to authenticated
+using (id = (select auth.uid()))
+with check (id = (select auth.uid()));
+
+create or replace function public.handle_new_user_profile()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  insert into public.profiles (id, email, fone)
+  values (
+    new.id,
+    coalesce(new.email, ''),
+    coalesce(new.raw_user_meta_data ->> 'fone', '')
+  )
+  on conflict (id) do update
+  set email = excluded.email,
+      fone = excluded.fone,
+      updated_at = now();
+
+  return new;
+end;
+$$;
+
+revoke all on function public.handle_new_user_profile() from public;
+revoke all on function public.handle_new_user_profile() from anon;
+revoke all on function public.handle_new_user_profile() from authenticated;
+
+drop trigger if exists on_auth_user_created_profile on auth.users;
+create trigger on_auth_user_created_profile
+after insert on auth.users
+for each row execute function public.handle_new_user_profile();
+
 -- Backfill dos dados ja existentes para o dono atual.
 -- update public.clientes
 -- set user_id = 'OWNER_USER_ID'
