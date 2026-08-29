@@ -4,6 +4,8 @@ import { FormEvent, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 
+import { InstallPwaButton } from "./InstallPwaButton";
+
 export function AuthPanel() {
   const router = useRouter();
   const supabase = useMemo(() => createSupabaseBrowserClient(), []);
@@ -198,6 +200,18 @@ export function AuthPanel() {
                 : "Entrar"}
           </button>
         </form>
+
+        <div className="mt-6 border-t border-gray-200 pt-4">
+          <p className="mb-2 text-center text-xs font-semibold uppercase tracking-wide text-gray-500">
+            Instalar no celular
+          </p>
+          <div className="flex justify-center">
+            <InstallPwaButton />
+          </div>
+          <p className="mt-2 text-center text-xs text-gray-500">
+            No Android use Chrome &gt; ⋮ &gt; Instalar app. No iPhone use Safari &gt; Compartilhar &gt; Tela de Início.
+          </p>
+        </div>
       </section>
     </main>
   );
