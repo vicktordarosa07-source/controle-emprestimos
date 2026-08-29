@@ -135,97 +135,13 @@ export async function registrarPagamentoCliente(formData: FormData) {
   const { supabase } = await requireUser();
   const clienteId = parseRequiredText(formData.get("cliente_id"), "Cliente");
   const valorRecebido = parsePositiveNumber(formData.get("valor_pago"), "Valor pago");
-  const hojeStr = formatDateOnly(new Date());
-  let restanteCentavos = Math.round(valorRecebido * 100);
+  const { error } = await supabase.rpc("registrar_pagamento_cliente", {
+    p_cliente_id: clienteId,
+    p_valor_pago: valorRecebido,
+  });
 
-  const { data: cliente, error: clienteError } = await supabase
-    .from("clientes")
-    .select("id")
-    .eq("id", clienteId)
-    .single();
-
-  if (clienteError || !cliente) {
-    throw new Error("Cliente nao encontrado para este usuario.");
-  }
-
-  const { data: emprestimos, error: emprestimosError } = await supabase
-    .from("emprestimos")
-    .select("id")
-    .eq("cliente_id", clienteId);
-
-  if (emprestimosError) {
-    throw new Error(`Erro ao buscar emprestimos: ${emprestimosError.message}`);
-  }
-
-  const emprestimoIds = (emprestimos ?? []).map((emprestimo) => emprestimo.id);
-
-  if (emprestimoIds.length === 0) {
-    throw new Error("Este cliente nao possui emprestimos.");
-  }
-
-  const { data: parcelas, error: parcelasError } = await supabase
-    .from("parcelas")
-    .select("id, valor, valor_pago, numero, data_vencimento")
-    .in("emprestimo_id", emprestimoIds)
-    .neq("status", "Pago")
-    .order("data_vencimento", { ascending: true })
-    .order("numero", { ascending: true });
-
-  if (parcelasError) {
-    throw new Error(`Erro ao buscar parcelas: ${parcelasError.message}`);
-  }
-
-  const abertas = parcelas ?? [];
-  const saldoTotalCentavos = abertas.reduce((total, parcela) => {
-    const valorCentavos = Math.round(Number(parcela.valor) * 100);
-    const pagoCentavos = Math.round(Number(parcela.valor_pago ?? 0) * 100);
-    return total + Math.max(valorCentavos - pagoCentavos, 0);
-  }, 0);
-
-  if (saldoTotalCentavos <= 0) {
-    throw new Error("Este cliente nao possui saldo em aberto.");
-  }
-
-  if (restanteCentavos > saldoTotalCentavos) {
-    throw new Error(
-      `Valor pago maior que o saldo em aberto (${(saldoTotalCentavos / 100).toLocaleString("pt-BR", {
-        style: "currency",
-        currency: "BRL",
-      })}).`
-    );
-  }
-
-  for (const parcela of abertas) {
-    if (restanteCentavos <= 0) {
-      break;
-    }
-
-    const valorCentavos = Math.round(Number(parcela.valor) * 100);
-    const pagoAtualCentavos = Math.round(Number(parcela.valor_pago ?? 0) * 100);
-    const saldoParcelaCentavos = Math.max(valorCentavos - pagoAtualCentavos, 0);
-
-    if (saldoParcelaCentavos === 0) {
-      continue;
-    }
-
-    const aplicadoCentavos = Math.min(restanteCentavos, saldoParcelaCentavos);
-    const novoPagoCentavos = pagoAtualCentavos + aplicadoCentavos;
-    const quitou = novoPagoCentavos >= valorCentavos;
-
-    const { error: updateError } = await supabase
-      .from("parcelas")
-      .update({
-        valor_pago: novoPagoCentavos / 100,
-        status: quitou ? "Pago" : "Pendente",
-        data_pagamento: quitou ? hojeStr : null,
-      })
-      .eq("id", parcela.id);
-
-    if (updateError) {
-      throw new Error(`Erro ao registrar pagamento: ${updateError.message}`);
-    }
-
-    restanteCentavos -= aplicadoCentavos;
+  if (error) {
+    throw new Error(`Erro ao registrar pagamento: ${error.message}`);
   }
 
   revalidatePath("/");
