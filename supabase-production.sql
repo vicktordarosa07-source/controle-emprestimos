@@ -21,8 +21,12 @@ alter table public.emprestimos
   add constraint emprestimos_qtd_parcelas_range check (qtd_parcelas between 1 and 120);
 
 alter table public.parcelas
+  add column if not exists valor_pago numeric not null default 0;
+
+alter table public.parcelas
   alter column emprestimo_id set not null,
   add constraint parcelas_valor_positive check (valor > 0),
+  add constraint parcelas_valor_pago_range check (valor_pago >= 0 and valor_pago <= valor),
   add constraint parcelas_status_check check (status in ('Pendente', 'Pago')),
   add constraint parcelas_numero_positive check (numero > 0);
 

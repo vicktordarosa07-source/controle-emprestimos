@@ -10,6 +10,7 @@ export type ParcelaInsert = {
   emprestimo_id: string;
   numero: number;
   valor: number;
+  valor_pago: number;
   data_vencimento: string;
   status: "Pendente";
 };
@@ -126,6 +127,7 @@ export function buildParcelas({
       emprestimo_id: emprestimoId,
       numero: index + 1,
       valor: valorCentavos / 100,
+      valor_pago: 0,
       data_vencimento: addMonthsPreservingDueDay(dataPrimeiroVencimento, index),
       status: "Pendente",
     };

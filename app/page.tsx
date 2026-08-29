@@ -3,6 +3,7 @@ import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { AuthPanel, SignOutButton } from "./components/AuthPanel";
 import { NovoEmprestimoModal } from "./components/NovoEmprestimoModal";
 import { MarcarPagoButton } from "./components/MarcarPagoButton";
+import { RegistrarPagamentoForm } from "./components/RegistrarPagamentoForm";
 
 export const dynamic = "force-dynamic";
 
@@ -13,6 +14,7 @@ type ParcelaComCliente = {
   id: string;
   numero: number;
   valor: number;
+  valor_pago: number | null;
   data_vencimento: string;
   data_pagamento: string | null;
   status: ParcelaStatus;
@@ -67,8 +69,20 @@ function getClienteId(parcela: ParcelaComCliente) {
   return parcela.emprestimos?.clientes?.id ?? `sem-cliente:${getNomeCliente(parcela)}`;
 }
 
-function sumParcelas(parcelas: ParcelaComCliente[]) {
-  return parcelas.reduce((total, parcela) => total + Number(parcela.valor), 0);
+function getValorPago(parcela: ParcelaComCliente) {
+  return Number(parcela.valor_pago ?? 0);
+}
+
+function getSaldoParcela(parcela: ParcelaComCliente) {
+  return Math.max(Number(parcela.valor) - getValorPago(parcela), 0);
+}
+
+function sumSaldoRestante(parcelas: ParcelaComCliente[]) {
+  return parcelas.reduce((total, parcela) => total + getSaldoParcela(parcela), 0);
+}
+
+function sumValorPago(parcelas: ParcelaComCliente[]) {
+  return parcelas.reduce((total, parcela) => total + getValorPago(parcela), 0);
 }
 
 function agruparPorCliente(parcelas: ParcelaComCliente[], hojeStr: string) {
@@ -94,8 +108,8 @@ function agruparPorCliente(parcelas: ParcelaComCliente[], hojeStr: string) {
         nome: getNomeCliente(parcelasDoCliente[0]),
         parcelas: abertas,
         proximaParcela: proximas[0] ?? null,
-        totalRestante: sumParcelas(abertas),
-        totalAtrasado: sumParcelas(atrasadas),
+        totalRestante: sumSaldoRestante(abertas),
+        totalAtrasado: sumSaldoRestante(atrasadas),
         atrasadas: atrasadas.length,
         proximoVencimento: proximas[0]?.data_vencimento ?? null,
       };
@@ -199,6 +213,8 @@ function ParcelaCard({
   const isPaga = parcela.status === "Pago";
   const isAtrasada = !isPaga && parcela.data_vencimento < hojeStr;
   const atraso = diasAtraso(parcela.data_vencimento, hoje);
+  const saldo = getSaldoParcela(parcela);
+  const valorPago = getValorPago(parcela);
 
   return (
     <article className="flex min-h-44 flex-col justify-between gap-4 border border-gray-200 bg-white p-4 shadow-sm">
@@ -213,7 +229,7 @@ function ParcelaCard({
             </p>
           </div>
           <strong className="shrink-0 bg-gray-100 px-2.5 py-1 text-xs font-bold text-gray-800">
-            {formatCurrency(parcela.valor)}
+            {formatCurrency(saldo)}
           </strong>
         </div>
 
@@ -243,6 +259,12 @@ function ParcelaCard({
             </p>
           </div>
         </div>
+
+        {valorPago > 0 && !isPaga ? (
+          <p className="border-l-4 border-blue-600 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-800">
+            Pago {formatCurrency(valorPago)} • falta {formatCurrency(saldo)}
+          </p>
+        ) : null}
 
         {isAtrasada ? (
           <p className="border-l-4 border-red-600 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">
@@ -319,14 +341,22 @@ function ClienteCard({ cliente }: { cliente: ClienteResumo }) {
               Próxima parcela
             </p>
             <p className="mt-1 text-sm font-bold text-gray-950">
-              Parcela {proximaParcela.numero} • {formatCurrency(proximaParcela.valor)} •{" "}
-              {formatDate(proximaParcela.data_vencimento)}
+              Parcela {proximaParcela.numero} • falta{" "}
+              {formatCurrency(getSaldoParcela(proximaParcela))} •{" "}
+              vence {formatDate(proximaParcela.data_vencimento)}
             </p>
+            {getValorPago(proximaParcela) > 0 ? (
+              <p className="mt-1 text-xs font-semibold text-blue-700">
+                Já pago nesta parcela: {formatCurrency(getValorPago(proximaParcela))}
+              </p>
+            ) : null}
           </div>
-          <MarcarPagoButton
-            parcelaId={proximaParcela.id}
-            status={proximaParcela.status}
-          />
+          <div className="w-full sm:max-w-sm">
+            <RegistrarPagamentoForm
+              clienteId={cliente.clienteId}
+              saldoAberto={cliente.totalRestante}
+            />
+          </div>
         </div>
       ) : null}
     </article>
@@ -435,6 +465,7 @@ export default async function Home({ searchParams }: PageProps) {
         id,
         numero,
         valor,
+        valor_pago,
         data_vencimento,
         data_pagamento,
         status,
@@ -516,22 +547,22 @@ export default async function Home({ searchParams }: PageProps) {
         <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <SummaryCard
             label="Total a receber"
-            value={formatCurrency(sumParcelas(abertas))}
+            value={formatCurrency(sumSaldoRestante(abertas))}
             tone="blue"
           />
           <SummaryCard
             label="Atrasado"
-            value={formatCurrency(sumParcelas(atrasadas))}
+            value={formatCurrency(sumSaldoRestante(atrasadas))}
             tone="red"
           />
           <SummaryCard
             label="A vencer"
-            value={formatCurrency(sumParcelas(aVencer))}
+            value={formatCurrency(sumSaldoRestante(aVencer))}
             tone="green"
           />
           <SummaryCard
             label="Recebido"
-            value={formatCurrency(sumParcelas(pagas))}
+            value={formatCurrency(sumValorPago(filtradasPorBusca))}
             tone="gray"
           />
         </section>
