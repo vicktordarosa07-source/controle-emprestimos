@@ -19,8 +19,18 @@ type ParcelaComCliente = {
   emprestimo_id: string;
   emprestimos: {
     id: string;
-    clientes: { nome: string } | null;
+    clientes: { id: string; nome: string } | null;
   } | null;
+};
+
+type ClienteResumo = {
+  clienteId: string;
+  nome: string;
+  parcelas: ParcelaComCliente[];
+  totalRestante: number;
+  totalAtrasado: number;
+  atrasadas: number;
+  proximoVencimento: string | null;
 };
 
 type PageProps = {
@@ -52,8 +62,54 @@ function getNomeCliente(parcela: ParcelaComCliente) {
   return parcela.emprestimos?.clientes?.nome ?? "Cliente sem nome";
 }
 
+function getClienteId(parcela: ParcelaComCliente) {
+  return parcela.emprestimos?.clientes?.id ?? `sem-cliente:${getNomeCliente(parcela)}`;
+}
+
 function sumParcelas(parcelas: ParcelaComCliente[]) {
   return parcelas.reduce((total, parcela) => total + Number(parcela.valor), 0);
+}
+
+function agruparPorCliente(parcelas: ParcelaComCliente[], hojeStr: string) {
+  const grupos = new Map<string, ParcelaComCliente[]>();
+
+  for (const parcela of parcelas) {
+    const clienteId = getClienteId(parcela);
+    const existentes = grupos.get(clienteId) ?? [];
+    existentes.push(parcela);
+    grupos.set(clienteId, existentes);
+  }
+
+  return Array.from(grupos.entries())
+    .map(([clienteId, parcelasDoCliente]) => {
+      const abertas = parcelasDoCliente.filter((parcela) => parcela.status !== "Pago");
+      const atrasadas = abertas.filter((parcela) => parcela.data_vencimento < hojeStr);
+      const proximas = [...abertas].sort((a, b) =>
+        a.data_vencimento.localeCompare(b.data_vencimento)
+      );
+
+      return {
+        clienteId,
+        nome: getNomeCliente(parcelasDoCliente[0]),
+        parcelas: abertas,
+        totalRestante: sumParcelas(abertas),
+        totalAtrasado: sumParcelas(atrasadas),
+        atrasadas: atrasadas.length,
+        proximoVencimento: proximas[0]?.data_vencimento ?? null,
+      };
+    })
+    .filter((cliente) => cliente.parcelas.length > 0)
+    .sort((a, b) => {
+      if (b.atrasadas !== a.atrasadas) {
+        return b.atrasadas - a.atrasadas;
+      }
+
+      if (b.totalRestante !== a.totalRestante) {
+        return b.totalRestante - a.totalRestante;
+      }
+
+      return a.nome.localeCompare(b.nome, "pt-BR");
+    });
 }
 
 function normalizeView(value: string | undefined): ViewFilter {
@@ -204,6 +260,88 @@ function ParcelaCard({
   );
 }
 
+function ClienteCard({ cliente }: { cliente: ClienteResumo }) {
+  return (
+    <article className="border border-gray-200 bg-white p-5 shadow-sm">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <h3 className="truncate text-xl font-bold text-gray-950">{cliente.nome}</h3>
+          <p className="mt-1 text-sm font-medium text-gray-600">
+            {cliente.parcelas.length} parcela(s) faltando
+          </p>
+        </div>
+
+        <div className="bg-blue-50 px-4 py-3 text-left sm:text-right">
+          <p className="text-xs font-bold uppercase tracking-wide text-blue-700">
+            Falta pagar
+          </p>
+          <p className="mt-1 text-2xl font-black text-blue-950">
+            {formatCurrency(cliente.totalRestante)}
+          </p>
+        </div>
+      </div>
+
+      <div className="mt-5 grid grid-cols-1 gap-3 text-sm sm:grid-cols-3">
+        <div className="border border-gray-200 p-3">
+          <p className="text-xs font-bold uppercase tracking-wide text-gray-500">
+            Próximo vencimento
+          </p>
+          <p className="mt-1 font-bold text-gray-950">
+            {cliente.proximoVencimento ? formatDate(cliente.proximoVencimento) : "Sem parcelas"}
+          </p>
+        </div>
+        <div className="border border-gray-200 p-3">
+          <p className="text-xs font-bold uppercase tracking-wide text-gray-500">
+            Atrasadas
+          </p>
+          <p className={cliente.atrasadas > 0 ? "mt-1 font-bold text-red-700" : "mt-1 font-bold text-gray-950"}>
+            {cliente.atrasadas} parcela(s)
+          </p>
+        </div>
+        <div className="border border-gray-200 p-3">
+          <p className="text-xs font-bold uppercase tracking-wide text-gray-500">
+            Valor atrasado
+          </p>
+          <p className={cliente.totalAtrasado > 0 ? "mt-1 font-bold text-red-700" : "mt-1 font-bold text-gray-950"}>
+            {formatCurrency(cliente.totalAtrasado)}
+          </p>
+        </div>
+      </div>
+    </article>
+  );
+}
+
+function ClientesSection({
+  title,
+  clientes,
+}: {
+  title: string;
+  clientes: ClienteResumo[];
+}) {
+  return (
+    <section className="space-y-3">
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-lg font-bold text-gray-950">{title}</h2>
+        <span className="text-sm font-semibold text-gray-500">
+          {clientes.length} cliente(s)
+        </span>
+      </div>
+
+      {clientes.length === 0 ? (
+        <div className="border border-dashed border-gray-300 bg-white p-6 text-center text-sm font-medium text-gray-500">
+          Nenhum cliente nesta visão.
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          {clientes.map((cliente) => (
+            <ClienteCard key={cliente.clienteId} cliente={cliente} />
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
 function ParcelasSection({
   title,
   parcelas,
@@ -282,6 +420,7 @@ export default async function Home({ searchParams }: PageProps) {
         emprestimos (
           id,
           clientes (
+            id,
             nome
           )
         )
@@ -318,6 +457,13 @@ export default async function Home({ searchParams }: PageProps) {
     pagas,
     todas: filtradasPorBusca,
   }[activeView];
+  const visibleClientes =
+    activeView === "pagas"
+      ? []
+      : agruparPorCliente(
+          activeView === "todas" ? abertas : visibleParcelas,
+          hojeStr
+        );
 
   return (
     <main className="min-h-screen bg-gray-50">
@@ -404,12 +550,16 @@ export default async function Home({ searchParams }: PageProps) {
           </div>
         </section>
 
-        <ParcelasSection
-          title={viewLabels[activeView]}
-          parcelas={visibleParcelas}
-          hoje={hoje}
-          hojeStr={hojeStr}
-        />
+        {activeView === "pagas" ? (
+          <ParcelasSection
+            title={viewLabels[activeView]}
+            parcelas={visibleParcelas}
+            hoje={hoje}
+            hojeStr={hojeStr}
+          />
+        ) : (
+          <ClientesSection title={viewLabels[activeView]} clientes={visibleClientes} />
+        )}
 
         {activeView !== "pagas" && pagasRecentes.length > 0 ? (
           <ParcelasSection
