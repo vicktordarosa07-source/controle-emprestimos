@@ -78,6 +78,49 @@ export function NovoEmprestimoModal() {
 
                 <div>
                   <label className="block text-sm font-medium mb-1">
+                    Endereço
+                  </label>
+                  <input
+                    name="endereco"
+                    required
+                    maxLength={240}
+                    placeholder="Rua, número, bairro, cidade"
+                    className="w-full border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <div>
+                    <label className="block text-sm font-medium mb-1">
+                      Telefone
+                    </label>
+                    <input
+                      name="telefone"
+                      required
+                      inputMode="tel"
+                      maxLength={20}
+                      placeholder="(00) 00000-0000"
+                      className="w-full border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium mb-1">
+                      CPF
+                    </label>
+                    <input
+                      name="cpf"
+                      required
+                      inputMode="numeric"
+                      maxLength={14}
+                      placeholder="000.000.000-00"
+                      className="w-full border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-1">
                     Valor total (R$)
                   </label>
                   <input

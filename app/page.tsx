@@ -5,7 +5,7 @@ import { AuthPanel, SignOutButton } from "./components/AuthPanel";
 import { NovoEmprestimoModal } from "./components/NovoEmprestimoModal";
 import { MarcarPagoButton } from "./components/MarcarPagoButton";
 import { RegistrarPagamentoForm } from "./components/RegistrarPagamentoForm";
-import { aprovarUsuario } from "./actions";
+import { aprovarUsuario, atualizarCliente } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -28,13 +28,22 @@ type ParcelaComCliente = {
     intervalo_personalizado_dias: number | null;
     juros_atraso_tipo: TipoJurosAtraso | null;
     juros_atraso_valor: number | null;
-    clientes: { id: string; nome: string } | null;
+    clientes: ClienteCadastro | null;
   } | null;
+};
+
+type ClienteCadastro = {
+  id: string;
+  nome: string;
+  endereco: string | null;
+  telefone: string | null;
+  cpf: string | null;
 };
 
 type ClienteResumo = {
   clienteId: string;
   nome: string;
+  cadastro: ClienteCadastro;
   parcelas: ParcelaComCliente[];
   parcelasVisiveis: ParcelaComCliente[];
   proximaParcela: ParcelaComCliente | null;
@@ -79,12 +88,57 @@ function formatDate(dateStr: string) {
   return new Date(`${dateStr}T12:00:00`).toLocaleDateString("pt-BR");
 }
 
+function formatCpf(cpf: string | null) {
+  const digits = (cpf ?? "").replace(/\D/g, "");
+
+  if (digits.length !== 11) {
+    return cpf ?? "";
+  }
+
+  return digits.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4");
+}
+
+function getClienteCadastro(parcela: ParcelaComCliente): ClienteCadastro {
+  const cliente = parcela.emprestimos?.clientes;
+
+  return {
+    id: cliente?.id ?? `sem-cliente:${getNomeCliente(parcela)}`,
+    nome: cliente?.nome ?? "Cliente sem nome",
+    endereco: cliente?.endereco ?? "",
+    telefone: cliente?.telefone ?? "",
+    cpf: cliente?.cpf ?? "",
+  };
+}
+
 function getNomeCliente(parcela: ParcelaComCliente) {
   return parcela.emprestimos?.clientes?.nome ?? "Cliente sem nome";
 }
 
 function getClienteId(parcela: ParcelaComCliente) {
   return parcela.emprestimos?.clientes?.id ?? `sem-cliente:${getNomeCliente(parcela)}`;
+}
+
+function clienteMatchesQuery(parcela: ParcelaComCliente, query: string) {
+  if (!query) {
+    return true;
+  }
+
+  const cliente = getClienteCadastro(parcela);
+  const queryDigits = query.replace(/\D/g, "");
+  const searchableText = [
+    cliente.nome,
+    cliente.endereco ?? "",
+    cliente.telefone ?? "",
+    cliente.cpf ?? "",
+  ]
+    .join(" ")
+    .toLocaleLowerCase("pt-BR");
+  const searchableDigits = `${cliente.telefone ?? ""} ${cliente.cpf ?? ""}`.replace(/\D/g, "");
+
+  return (
+    searchableText.includes(query.toLocaleLowerCase("pt-BR")) ||
+    (queryDigits.length > 0 && searchableDigits.includes(queryDigits))
+  );
 }
 
 function getValorPago(parcela: ParcelaComCliente) {
@@ -181,6 +235,7 @@ function agruparPorCliente({
       return {
         clienteId,
         nome: getNomeCliente(parcelasDoCliente[0]),
+        cadastro: getClienteCadastro(parcelasDoCliente[0]),
         parcelas: abertas,
         parcelasVisiveis: visiveisPorCliente.get(clienteId) ?? [],
         proximaParcela: proximas[0] ?? null,
@@ -590,6 +645,7 @@ function ClienteCard({
   hojeStr: string;
 }) {
   const proximaParcela = cliente.proximaParcela;
+  const cadastro = cliente.cadastro;
 
   return (
     <details className="group border border-gray-200 bg-white shadow-sm">
@@ -602,6 +658,10 @@ function ClienteCard({
                 {cliente.parcelas.length} parcela(s) em aberto •{" "}
                 {cliente.parcelasVisiveis.length} nesta visão
               </p>
+              <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs font-semibold text-gray-500">
+                {cadastro.telefone ? <span>Telefone: {cadastro.telefone}</span> : null}
+                {cadastro.cpf ? <span>CPF: {formatCpf(cadastro.cpf)}</span> : null}
+              </div>
             </div>
 
             <div className="bg-blue-50 px-4 py-3 text-left sm:text-right">
@@ -648,6 +708,72 @@ function ClienteCard({
       </summary>
 
       <div className="border-t border-gray-200 p-5 pt-4">
+        <form action={atualizarCliente} className="mb-5 space-y-3 border border-gray-200 bg-gray-50 p-4">
+          <input type="hidden" name="cliente_id" value={cliente.clienteId} />
+          <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+            <h4 className="text-sm font-bold text-gray-950">Dados do cliente</h4>
+            <button className="min-h-9 border border-gray-950 bg-gray-950 px-4 text-sm font-bold text-white hover:bg-gray-800">
+              Salvar dados
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wide text-gray-500">
+                Nome
+              </label>
+              <input
+                name="nome"
+                required
+                maxLength={120}
+                defaultValue={cadastro.nome}
+                className="mt-1 min-h-10 w-full border border-gray-300 bg-white px-3 text-sm font-semibold outline-none focus:border-blue-700 focus:ring-2 focus:ring-blue-100"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wide text-gray-500">
+                CPF
+              </label>
+              <input
+                name="cpf"
+                required
+                inputMode="numeric"
+                maxLength={14}
+                defaultValue={formatCpf(cadastro.cpf)}
+                className="mt-1 min-h-10 w-full border border-gray-300 bg-white px-3 text-sm font-semibold outline-none focus:border-blue-700 focus:ring-2 focus:ring-blue-100"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wide text-gray-500">
+                Telefone
+              </label>
+              <input
+                name="telefone"
+                required
+                inputMode="tel"
+                maxLength={20}
+                defaultValue={cadastro.telefone ?? ""}
+                className="mt-1 min-h-10 w-full border border-gray-300 bg-white px-3 text-sm font-semibold outline-none focus:border-blue-700 focus:ring-2 focus:ring-blue-100"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wide text-gray-500">
+                Endereço
+              </label>
+              <input
+                name="endereco"
+                required
+                maxLength={240}
+                defaultValue={cadastro.endereco ?? ""}
+                className="mt-1 min-h-10 w-full border border-gray-300 bg-white px-3 text-sm font-semibold outline-none focus:border-blue-700 focus:ring-2 focus:ring-blue-100"
+              />
+            </div>
+          </div>
+        </form>
+
         {proximaParcela ? (
           <div className="mb-5 flex flex-col gap-3 border border-blue-100 bg-blue-50 p-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
@@ -812,7 +938,10 @@ export default async function Home({ searchParams }: PageProps) {
           juros_atraso_valor,
           clientes (
             id,
-            nome
+            nome,
+            endereco,
+            telefone,
+            cpf
           )
         )
       `
@@ -829,9 +958,7 @@ export default async function Home({ searchParams }: PageProps) {
   }
 
   const filtradasPorBusca = normalizedQuery
-    ? parcelas.filter((parcela) =>
-        getNomeCliente(parcela).toLocaleLowerCase("pt-BR").includes(normalizedQuery)
-      )
+    ? parcelas.filter((parcela) => clienteMatchesQuery(parcela, normalizedQuery))
     : parcelas;
 
   const pagas = filtradasPorBusca.filter((parcela) => parcela.status === "Pago");
@@ -913,7 +1040,7 @@ export default async function Home({ searchParams }: PageProps) {
               id="search-client"
               name="q"
               defaultValue={q}
-              placeholder="Buscar por cliente"
+              placeholder="Buscar por nome, CPF, telefone ou endereço"
               className="min-h-11 flex-1 border border-gray-300 px-3 text-sm font-medium outline-none focus:border-blue-700 focus:ring-2 focus:ring-blue-100"
             />
             <button className="min-h-11 border border-blue-700 bg-blue-700 px-5 text-sm font-bold text-white hover:bg-blue-800">

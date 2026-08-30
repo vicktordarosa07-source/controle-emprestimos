@@ -36,6 +36,27 @@ export function parseRequiredText(value: FormDataEntryValue | null, field: strin
   return value.trim();
 }
 
+export function parseCpf(value: FormDataEntryValue | null) {
+  const digits = parseRequiredText(value, "CPF").replace(/\D/g, "");
+
+  if (!/^\d{11}$/.test(digits)) {
+    throw new Error("CPF deve ter 11 digitos");
+  }
+
+  return digits;
+}
+
+export function parsePhone(value: FormDataEntryValue | null) {
+  const raw = parseRequiredText(value, "Telefone");
+  const digits = raw.replace(/\D/g, "");
+
+  if (digits.length < 10 || digits.length > 15) {
+    throw new Error("Telefone deve ter DDD e entre 10 e 15 digitos");
+  }
+
+  return raw.trim();
+}
+
 export function parsePositiveNumber(value: FormDataEntryValue | null, field: string) {
   const raw = parseRequiredText(value, field).replace(",", ".");
 

@@ -5,11 +5,13 @@ import {
   calcularJurosAtraso,
   formatDateOnly,
   parseCustomIntervalDays,
+  parseCpf,
   parseDateOnly,
   parseDueFrequency,
   parseInstallmentCount,
   parseLateInterestType,
   parseNonNegativeNumber,
+  parsePhone,
   parsePositiveNumber,
   parseRequiredText,
 } from "@/lib/loan-utils";
@@ -33,6 +35,9 @@ async function requireUser() {
 export async function criarEmprestimo(formData: FormData) {
   const { supabase, user } = await requireUser();
   const nome = parseRequiredText(formData.get("nome"), "Nome do cliente");
+  const endereco = parseRequiredText(formData.get("endereco"), "Endereco");
+  const telefone = parsePhone(formData.get("telefone"));
+  const cpf = parseCpf(formData.get("cpf"));
   const valorTotal = parsePositiveNumber(formData.get("valor"), "Valor total");
   const jurosPercentual = parseNonNegativeNumber(formData.get("juros"), "Juros");
   const jurosAtrasoTipo = parseLateInterestType(formData.get("juros_atraso_tipo"));
@@ -54,7 +59,7 @@ export async function criarEmprestimo(formData: FormData) {
   // 1. Cria cliente
   const { data: cliente, error: clienteError } = await supabase
     .from("clientes")
-    .insert({ nome, user_id: user.id })
+    .insert({ nome, endereco, telefone, cpf, user_id: user.id })
     .select()
     .single();
 
@@ -170,7 +175,12 @@ export async function reabrirParcela(parcelaId: string) {
 
   const { error } = await supabase
     .from("parcelas")
-    .update({ status: "Pendente", data_pagamento: null, valor_pago: 0 })
+    .update({
+      status: "Pendente",
+      data_pagamento: null,
+      valor_pago: 0,
+      valor_juros_atraso_pago: 0,
+    })
     .eq("id", parcelaId)
     .eq("status", "Pago");
 
@@ -192,6 +202,26 @@ export async function registrarPagamentoCliente(formData: FormData) {
 
   if (error) {
     throw new Error(`Erro ao registrar pagamento: ${error.message}`);
+  }
+
+  revalidatePath("/");
+}
+
+export async function atualizarCliente(formData: FormData) {
+  const { supabase } = await requireUser();
+  const clienteId = parseRequiredText(formData.get("cliente_id"), "Cliente");
+  const nome = parseRequiredText(formData.get("nome"), "Nome do cliente");
+  const endereco = parseRequiredText(formData.get("endereco"), "Endereco");
+  const telefone = parsePhone(formData.get("telefone"));
+  const cpf = parseCpf(formData.get("cpf"));
+
+  const { error } = await supabase
+    .from("clientes")
+    .update({ nome, endereco, telefone, cpf })
+    .eq("id", clienteId);
+
+  if (error) {
+    throw new Error(`Erro ao atualizar cliente: ${error.message}`);
   }
 
   revalidatePath("/");

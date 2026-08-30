@@ -4,7 +4,10 @@
 -- 3. Substitua OWNER_USER_ID abaixo e rode o arquivo inteiro.
 
 alter table public.clientes
-  add column if not exists user_id uuid references auth.users(id) on delete cascade;
+  add column if not exists user_id uuid references auth.users(id) on delete cascade,
+  add column if not exists endereco text not null default '',
+  add column if not exists telefone text not null default '',
+  add column if not exists cpf text not null default '';
 
 create table if not exists public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
