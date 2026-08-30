@@ -119,23 +119,6 @@ function getSaldoParcela(parcela: ParcelaComCliente, hoje: Date) {
   return getSaldoPrincipalParcela(parcela) + getJurosAtrasoPendente(parcela, hoje);
 }
 
-function getJurosAtrasoLabel(parcela: ParcelaComCliente) {
-  const valor = Number(parcela.emprestimos?.juros_atraso_valor ?? 0);
-
-  if (valor <= 0) {
-    return "Sem juro diario por atraso";
-  }
-
-  if ((parcela.emprestimos?.juros_atraso_tipo ?? "percentual") === "valor") {
-    return `${formatCurrency(valor)} por dia de atraso`;
-  }
-
-  return `${valor.toLocaleString("pt-BR", {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 2,
-  })}% ao dia sobre o saldo`;
-}
-
 function getPeriodicidadeLabel(parcela: ParcelaComCliente) {
   const periodicidade = parcela.emprestimos?.periodicidade_vencimento ?? "mensal";
   const intervalo = parcela.emprestimos?.intervalo_personalizado_dias;
@@ -363,6 +346,45 @@ function AdminApprovalPanel({ pendingUsers }: { pendingUsers: UserProfile[] }) {
   );
 }
 
+function AtrasoResumo({
+  valorParcela,
+  dias,
+  juros,
+  total,
+  compact = false,
+}: {
+  valorParcela: number;
+  dias: number;
+  juros: number;
+  total: number;
+  compact?: boolean;
+}) {
+  const itemClass = compact
+    ? "flex items-center justify-between gap-3"
+    : "flex items-center justify-between gap-3 border-b border-red-100 pb-1";
+
+  return (
+    <div className="space-y-1 border-l-4 border-red-600 bg-red-50 px-3 py-2 text-xs font-semibold text-red-800">
+      <div className={itemClass}>
+        <span>Valor da parcela</span>
+        <strong>{formatCurrency(valorParcela)}</strong>
+      </div>
+      <div className={itemClass}>
+        <span>Dias em atraso</span>
+        <strong>{dias}</strong>
+      </div>
+      <div className={itemClass}>
+        <span>Valor de juro</span>
+        <strong>{formatCurrency(juros)}</strong>
+      </div>
+      <div className="flex items-center justify-between gap-3 pt-1 text-sm text-red-950">
+        <span>Valor total</span>
+        <strong>{formatCurrency(total)}</strong>
+      </div>
+    </div>
+  );
+}
+
 function ParcelaCard({
   parcela,
   hoje,
@@ -377,6 +399,7 @@ function ParcelaCard({
   const isAtrasada = !isPaga && parcela.data_vencimento < hojeStr;
   const atraso = diasAtraso(parcela.data_vencimento, hoje);
   const saldo = getSaldoParcela(parcela, hoje);
+  const saldoPrincipal = getSaldoPrincipalParcela(parcela);
   const jurosAtraso = getJurosAtrasoPendente(parcela, hoje);
   const valorPago = getValorPago(parcela);
 
@@ -434,16 +457,12 @@ function ParcelaCard({
         ) : null}
 
         {isAtrasada ? (
-          <div className="border-l-4 border-red-600 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">
-            <p>
-              {atraso} {atraso === 1 ? "dia" : "dias"} de atraso
-            </p>
-            {jurosAtraso > 0 ? (
-              <p className="mt-1 text-xs">
-                Juro pendente: {formatCurrency(jurosAtraso)} • {getJurosAtrasoLabel(parcela)}
-              </p>
-            ) : null}
-          </div>
+          <AtrasoResumo
+            valorParcela={saldoPrincipal}
+            dias={atraso}
+            juros={jurosAtraso}
+            total={saldo}
+          />
         ) : null}
 
         {isPaga && parcela.data_pagamento ? (
@@ -486,8 +505,10 @@ function ParcelasDoCliente({
           <tbody className="divide-y divide-gray-200">
             {parcelas.map((parcela) => {
               const saldo = getSaldoParcela(parcela, hoje);
+              const saldoPrincipal = getSaldoPrincipalParcela(parcela);
               const valorPago = getValorPago(parcela);
               const jurosAtraso = getJurosAtrasoPendente(parcela, hoje);
+              const atraso = diasAtraso(parcela.data_vencimento, hoje);
               const isPaga = parcela.status === "Pago";
               const isAtrasada = !isPaga && parcela.data_vencimento < hojeStr;
 
@@ -524,14 +545,15 @@ function ParcelasDoCliente({
                       {isPaga ? "Pago" : isAtrasada ? "Atrasada" : "A vencer"}
                     </span>
                     {isAtrasada ? (
-                      <span className="mt-1 block text-xs font-semibold text-red-700">
-                        {diasAtraso(parcela.data_vencimento, hoje)} dia(s)
-                      </span>
-                    ) : null}
-                    {jurosAtraso > 0 ? (
-                      <span className="mt-1 block text-xs font-semibold text-red-700">
-                        Juro: {formatCurrency(jurosAtraso)}
-                      </span>
+                      <div className="mt-2 min-w-48">
+                        <AtrasoResumo
+                          valorParcela={saldoPrincipal}
+                          dias={atraso}
+                          juros={jurosAtraso}
+                          total={saldo}
+                          compact
+                        />
+                      </div>
                     ) : null}
                   </td>
                   <td className="px-4 py-3">
