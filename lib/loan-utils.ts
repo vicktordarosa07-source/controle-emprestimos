@@ -4,6 +4,8 @@ export type PeriodicidadeVencimento =
   | "mensal"
   | "personalizado";
 
+export type TipoJurosAtraso = "valor" | "percentual";
+
 export type InstallmentInput = {
   emprestimoId: string;
   valorTotal: number;
@@ -92,6 +94,16 @@ export function parseDueFrequency(value: FormDataEntryValue | null) {
     raw !== "personalizado"
   ) {
     throw new Error("Vencimento deve ser semanal, quinzenal, mensal ou personalizado");
+  }
+
+  return raw;
+}
+
+export function parseLateInterestType(value: FormDataEntryValue | null) {
+  const raw = parseRequiredText(value, "Tipo de juro por atraso");
+
+  if (raw !== "valor" && raw !== "percentual") {
+    throw new Error("Tipo de juro por atraso deve ser em reais ou percentual");
   }
 
   return raw;
@@ -286,4 +298,34 @@ export function diasAtraso(dataVencimento: string, hoje: Date) {
   baseHoje.setHours(12, 0, 0, 0);
 
   return Math.floor((baseHoje.getTime() - venc.getTime()) / MS_PER_DAY);
+}
+
+function roundCurrency(value: number) {
+  return Math.round(value * 100) / 100;
+}
+
+export function calcularJurosAtraso({
+  saldoPrincipal,
+  dataVencimento,
+  hoje,
+  tipo,
+  valorDiario,
+}: {
+  saldoPrincipal: number;
+  dataVencimento: string;
+  hoje: Date;
+  tipo: TipoJurosAtraso;
+  valorDiario: number;
+}) {
+  const atraso = diasAtraso(dataVencimento, hoje);
+
+  if (atraso <= 0 || saldoPrincipal <= 0 || valorDiario <= 0) {
+    return 0;
+  }
+
+  if (tipo === "valor") {
+    return roundCurrency(valorDiario * atraso);
+  }
+
+  return roundCurrency(saldoPrincipal * (valorDiario / 100) * atraso);
 }

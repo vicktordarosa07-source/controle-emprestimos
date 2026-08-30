@@ -178,8 +178,12 @@ alter table public.emprestimos
   alter column cliente_id set not null,
   add column if not exists periodicidade_vencimento text not null default 'mensal',
   add column if not exists intervalo_personalizado_dias integer,
+  add column if not exists juros_atraso_tipo text not null default 'percentual',
+  add column if not exists juros_atraso_valor numeric not null default 0,
   add constraint emprestimos_valor_total_positive check (valor_total > 0),
   add constraint emprestimos_juros_non_negative check (juros_percentual >= 0),
+  add constraint emprestimos_juros_atraso_tipo_check check (juros_atraso_tipo in ('valor', 'percentual')),
+  add constraint emprestimos_juros_atraso_valor_check check (juros_atraso_valor >= 0),
   add constraint emprestimos_qtd_parcelas_range check (qtd_parcelas between 1 and 120),
   add constraint emprestimos_periodicidade_check check (
     periodicidade_vencimento in ('semanal', 'quinzenal', 'mensal', 'personalizado')
@@ -196,12 +200,14 @@ alter table public.emprestimos
   );
 
 alter table public.parcelas
-  add column if not exists valor_pago numeric not null default 0;
+  add column if not exists valor_pago numeric not null default 0,
+  add column if not exists valor_juros_atraso_pago numeric not null default 0;
 
 alter table public.parcelas
   alter column emprestimo_id set not null,
   add constraint parcelas_valor_positive check (valor > 0),
   add constraint parcelas_valor_pago_range check (valor_pago >= 0 and valor_pago <= valor),
+  add constraint parcelas_valor_juros_atraso_pago_non_negative check (valor_juros_atraso_pago >= 0),
   add constraint parcelas_status_check check (status in ('Pendente', 'Pago')),
   add constraint parcelas_numero_positive check (numero > 0);
 
@@ -315,9 +321,14 @@ declare
   v_parcela record;
   v_valor_centavos bigint;
   v_pago_atual_centavos bigint;
+  v_juros_pago_atual_centavos bigint;
   v_saldo_parcela_centavos bigint;
+  v_juros_calculado_centavos bigint;
+  v_juros_pendente_centavos bigint;
+  v_dias_atraso integer;
   v_aplicado_centavos bigint;
   v_novo_pago_centavos bigint;
+  v_novo_juros_pago_centavos bigint;
 begin
   if p_valor_pago is null or p_valor_pago <= 0 then
     raise exception 'Valor pago deve ser maior que zero.';
@@ -334,7 +345,27 @@ begin
 
   v_restante_centavos := round(p_valor_pago * 100)::bigint;
 
-  select coalesce(sum(greatest(round((p.valor - p.valor_pago) * 100)::bigint, 0)), 0)
+  select coalesce(sum(
+    greatest(round((p.valor - p.valor_pago) * 100)::bigint, 0)
+    +
+    greatest(
+      (
+        case
+          when v_hoje > p.data_vencimento
+            and (p.valor - p.valor_pago) > 0
+            and coalesce(e.juros_atraso_valor, 0) > 0
+          then
+            case coalesce(e.juros_atraso_tipo, 'percentual')
+              when 'valor' then round(e.juros_atraso_valor * (v_hoje - p.data_vencimento) * 100)::bigint
+              else round((p.valor - p.valor_pago) * (e.juros_atraso_valor / 100) * (v_hoje - p.data_vencimento) * 100)::bigint
+            end
+          else 0
+        end
+      )
+      - round(coalesce(p.valor_juros_atraso_pago, 0) * 100)::bigint,
+      0
+    )
+  ), 0)
   into v_saldo_total_centavos
   from public.parcelas p
   join public.emprestimos e on e.id = p.emprestimo_id
@@ -352,7 +383,14 @@ begin
   end if;
 
   for v_parcela in
-    select p.id, p.valor, p.valor_pago
+    select
+      p.id,
+      p.valor,
+      p.valor_pago,
+      p.valor_juros_atraso_pago,
+      p.data_vencimento,
+      e.juros_atraso_tipo,
+      e.juros_atraso_valor
     from public.parcelas p
     join public.emprestimos e on e.id = p.emprestimo_id
     join public.clientes c on c.id = e.cliente_id
@@ -366,17 +404,36 @@ begin
 
     v_valor_centavos := round(v_parcela.valor * 100)::bigint;
     v_pago_atual_centavos := round(coalesce(v_parcela.valor_pago, 0) * 100)::bigint;
+    v_juros_pago_atual_centavos := round(coalesce(v_parcela.valor_juros_atraso_pago, 0) * 100)::bigint;
     v_saldo_parcela_centavos := greatest(v_valor_centavos - v_pago_atual_centavos, 0);
+    v_dias_atraso := greatest(v_hoje - v_parcela.data_vencimento, 0);
 
-    if v_saldo_parcela_centavos <= 0 then
+    if v_dias_atraso > 0 and v_saldo_parcela_centavos > 0 and coalesce(v_parcela.juros_atraso_valor, 0) > 0 then
+      if coalesce(v_parcela.juros_atraso_tipo, 'percentual') = 'valor' then
+        v_juros_calculado_centavos := round(v_parcela.juros_atraso_valor * v_dias_atraso * 100)::bigint;
+      else
+        v_juros_calculado_centavos := round((v_saldo_parcela_centavos / 100.0) * (v_parcela.juros_atraso_valor / 100) * v_dias_atraso * 100)::bigint;
+      end if;
+    else
+      v_juros_calculado_centavos := 0;
+    end if;
+
+    v_juros_pendente_centavos := greatest(v_juros_calculado_centavos - v_juros_pago_atual_centavos, 0);
+
+    if v_saldo_parcela_centavos <= 0 and v_juros_pendente_centavos <= 0 then
       continue;
     end if;
+
+    v_aplicado_centavos := least(v_restante_centavos, v_juros_pendente_centavos);
+    v_novo_juros_pago_centavos := v_juros_pago_atual_centavos + v_aplicado_centavos;
+    v_restante_centavos := v_restante_centavos - v_aplicado_centavos;
 
     v_aplicado_centavos := least(v_restante_centavos, v_saldo_parcela_centavos);
     v_novo_pago_centavos := v_pago_atual_centavos + v_aplicado_centavos;
 
     update public.parcelas
     set valor_pago = v_novo_pago_centavos / 100.0,
+        valor_juros_atraso_pago = v_novo_juros_pago_centavos / 100.0,
         status = case when v_novo_pago_centavos >= v_valor_centavos then 'Pago' else 'Pendente' end,
         data_pagamento = case when v_novo_pago_centavos >= v_valor_centavos then v_hoje else null end
     where id = v_parcela.id;

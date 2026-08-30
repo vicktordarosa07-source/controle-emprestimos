@@ -8,6 +8,7 @@ export function NovoEmprestimoModal() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [periodicidade, setPeriodicidade] = useState("mensal");
+  const [jurosAtrasoTipo, setJurosAtrasoTipo] = useState("percentual");
   const formRef = useRef<HTMLFormElement>(null);
 
   async function handleSubmit(formData: FormData) {
@@ -17,6 +18,7 @@ export function NovoEmprestimoModal() {
       await criarEmprestimo(formData);
       formRef.current?.reset();
       setPeriodicidade("mensal");
+      setJurosAtrasoTipo("percentual");
       setOpen(false);
     } catch (e) {
       setError((e as Error).message);
@@ -31,6 +33,7 @@ export function NovoEmprestimoModal() {
         onClick={() => {
           setError(null);
           setPeriodicidade("mensal");
+          setJurosAtrasoTipo("percentual");
           setOpen(true);
         }}
         className="w-full bg-blue-700 px-5 py-3 font-semibold text-white shadow-sm transition hover:bg-blue-800 sm:w-auto"
@@ -101,6 +104,40 @@ export function NovoEmprestimoModal() {
                     placeholder="Ex: 10"
                     className="w-full border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
+                </div>
+
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_1fr]">
+                  <div>
+                    <label className="block text-sm font-medium mb-1">
+                      Juro diário por atraso
+                    </label>
+                    <select
+                      name="juros_atraso_tipo"
+                      required
+                      value={jurosAtrasoTipo}
+                      onChange={(event) => setJurosAtrasoTipo(event.target.value)}
+                      className="w-full border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="percentual">% sobre valor devido</option>
+                      <option value="valor">R$ por dia</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium mb-1">
+                      {jurosAtrasoTipo === "valor" ? "Valor por dia (R$)" : "Percentual ao dia (%)"}
+                    </label>
+                    <input
+                      name="juros_atraso_valor"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      required
+                      defaultValue="0"
+                      placeholder={jurosAtrasoTipo === "valor" ? "Ex: 5" : "Ex: 1"}
+                      className="w-full border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
                 </div>
 
                 <div>

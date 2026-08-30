@@ -2,11 +2,13 @@
 
 import {
   buildParcelas,
+  calcularJurosAtraso,
   formatDateOnly,
   parseCustomIntervalDays,
   parseDateOnly,
   parseDueFrequency,
   parseInstallmentCount,
+  parseLateInterestType,
   parseNonNegativeNumber,
   parsePositiveNumber,
   parseRequiredText,
@@ -33,6 +35,11 @@ export async function criarEmprestimo(formData: FormData) {
   const nome = parseRequiredText(formData.get("nome"), "Nome do cliente");
   const valorTotal = parsePositiveNumber(formData.get("valor"), "Valor total");
   const jurosPercentual = parseNonNegativeNumber(formData.get("juros"), "Juros");
+  const jurosAtrasoTipo = parseLateInterestType(formData.get("juros_atraso_tipo"));
+  const jurosAtrasoValor = parseNonNegativeNumber(
+    formData.get("juros_atraso_valor"),
+    "Juro diario por atraso"
+  );
   const qtdParcelas = parseInstallmentCount(formData.get("qtd_parcelas"));
   const dataPrimeiroVencimento = parseDateOnly(
     formData.get("data_primeiro_vencimento"),
@@ -66,6 +73,8 @@ export async function criarEmprestimo(formData: FormData) {
       data_primeiro_vencimento: dataPrimeiroVencimento,
       periodicidade_vencimento: periodicidade,
       intervalo_personalizado_dias: intervaloPersonalizadoDias,
+      juros_atraso_tipo: jurosAtrasoTipo,
+      juros_atraso_valor: jurosAtrasoValor,
     })
     .select()
     .single();
@@ -100,11 +109,22 @@ export async function criarEmprestimo(formData: FormData) {
 
 export async function marcarComoPago(parcelaId: string) {
   const { supabase } = await requireUser();
-  const hojeStr = formatDateOnly(new Date());
+  const hoje = new Date();
+  const hojeStr = formatDateOnly(hoje);
 
   const { data: parcela, error: parcelaError } = await supabase
     .from("parcelas")
-    .select("valor")
+    .select(
+      `
+      valor,
+      valor_pago,
+      data_vencimento,
+      emprestimos (
+        juros_atraso_tipo,
+        juros_atraso_valor
+      )
+    `
+    )
     .eq("id", parcelaId)
     .eq("status", "Pendente")
     .single();
@@ -113,9 +133,28 @@ export async function marcarComoPago(parcelaId: string) {
     throw new Error(`Erro ao buscar parcela: ${parcelaError?.message ?? "parcela nao encontrada"}`);
   }
 
+  const valorParcela = Number(parcela.valor);
+  const valorPago = Number(parcela.valor_pago ?? 0);
+  const saldoPrincipal = Math.max(valorParcela - valorPago, 0);
+  const emprestimo = Array.isArray(parcela.emprestimos)
+    ? parcela.emprestimos[0]
+    : parcela.emprestimos;
+  const jurosAtraso = calcularJurosAtraso({
+    saldoPrincipal,
+    dataVencimento: String(parcela.data_vencimento),
+    hoje,
+    tipo: emprestimo?.juros_atraso_tipo === "valor" ? "valor" : "percentual",
+    valorDiario: Number(emprestimo?.juros_atraso_valor ?? 0),
+  });
+
   const { error } = await supabase
     .from("parcelas")
-    .update({ status: "Pago", data_pagamento: hojeStr, valor_pago: parcela.valor })
+    .update({
+      status: "Pago",
+      data_pagamento: hojeStr,
+      valor_pago: valorParcela,
+      valor_juros_atraso_pago: jurosAtraso,
+    })
     .eq("id", parcelaId)
     .eq("status", "Pendente");
 

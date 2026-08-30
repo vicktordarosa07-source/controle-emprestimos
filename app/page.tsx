@@ -1,5 +1,5 @@
-import { diasAtraso, formatDateOnly } from "@/lib/loan-utils";
-import type { PeriodicidadeVencimento } from "@/lib/loan-utils";
+import { calcularJurosAtraso, diasAtraso, formatDateOnly } from "@/lib/loan-utils";
+import type { PeriodicidadeVencimento, TipoJurosAtraso } from "@/lib/loan-utils";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { AuthPanel, SignOutButton } from "./components/AuthPanel";
 import { NovoEmprestimoModal } from "./components/NovoEmprestimoModal";
@@ -17,6 +17,7 @@ type ParcelaComCliente = {
   numero: number;
   valor: number;
   valor_pago: number | null;
+  valor_juros_atraso_pago: number | null;
   data_vencimento: string;
   data_pagamento: string | null;
   status: ParcelaStatus;
@@ -25,6 +26,8 @@ type ParcelaComCliente = {
     id: string;
     periodicidade_vencimento: PeriodicidadeVencimento | null;
     intervalo_personalizado_dias: number | null;
+    juros_atraso_tipo: TipoJurosAtraso | null;
+    juros_atraso_valor: number | null;
     clientes: { id: string; nome: string } | null;
   } | null;
 };
@@ -88,8 +91,49 @@ function getValorPago(parcela: ParcelaComCliente) {
   return Number(parcela.valor_pago ?? 0);
 }
 
-function getSaldoParcela(parcela: ParcelaComCliente) {
+function getValorJurosAtrasoPago(parcela: ParcelaComCliente) {
+  return Number(parcela.valor_juros_atraso_pago ?? 0);
+}
+
+function getSaldoPrincipalParcela(parcela: ParcelaComCliente) {
   return Math.max(Number(parcela.valor) - getValorPago(parcela), 0);
+}
+
+function getJurosAtrasoPendente(parcela: ParcelaComCliente, hoje: Date) {
+  if (parcela.status === "Pago") {
+    return 0;
+  }
+
+  const jurosCalculado = calcularJurosAtraso({
+    saldoPrincipal: getSaldoPrincipalParcela(parcela),
+    dataVencimento: parcela.data_vencimento,
+    hoje,
+    tipo: parcela.emprestimos?.juros_atraso_tipo ?? "percentual",
+    valorDiario: Number(parcela.emprestimos?.juros_atraso_valor ?? 0),
+  });
+
+  return Math.max(jurosCalculado - getValorJurosAtrasoPago(parcela), 0);
+}
+
+function getSaldoParcela(parcela: ParcelaComCliente, hoje: Date) {
+  return getSaldoPrincipalParcela(parcela) + getJurosAtrasoPendente(parcela, hoje);
+}
+
+function getJurosAtrasoLabel(parcela: ParcelaComCliente) {
+  const valor = Number(parcela.emprestimos?.juros_atraso_valor ?? 0);
+
+  if (valor <= 0) {
+    return "Sem juro diario por atraso";
+  }
+
+  if ((parcela.emprestimos?.juros_atraso_tipo ?? "percentual") === "valor") {
+    return `${formatCurrency(valor)} por dia de atraso`;
+  }
+
+  return `${valor.toLocaleString("pt-BR", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  })}% ao dia sobre o saldo`;
 }
 
 function getPeriodicidadeLabel(parcela: ParcelaComCliente) {
@@ -107,8 +151,8 @@ function getPeriodicidadeLabel(parcela: ParcelaComCliente) {
   }[periodicidade];
 }
 
-function sumSaldoRestante(parcelas: ParcelaComCliente[]) {
-  return parcelas.reduce((total, parcela) => total + getSaldoParcela(parcela), 0);
+function sumSaldoRestante(parcelas: ParcelaComCliente[], hoje: Date) {
+  return parcelas.reduce((total, parcela) => total + getSaldoParcela(parcela, hoje), 0);
 }
 
 function sumValorPago(parcelas: ParcelaComCliente[]) {
@@ -118,10 +162,12 @@ function sumValorPago(parcelas: ParcelaComCliente[]) {
 function agruparPorCliente({
   todasParcelas,
   parcelasVisiveis,
+  hoje,
   hojeStr,
 }: {
   todasParcelas: ParcelaComCliente[];
   parcelasVisiveis: ParcelaComCliente[];
+  hoje: Date;
   hojeStr: string;
 }) {
   const grupos = new Map<string, ParcelaComCliente[]>();
@@ -155,8 +201,8 @@ function agruparPorCliente({
         parcelas: abertas,
         parcelasVisiveis: visiveisPorCliente.get(clienteId) ?? [],
         proximaParcela: proximas[0] ?? null,
-        totalRestante: sumSaldoRestante(abertas),
-        totalAtrasado: sumSaldoRestante(atrasadas),
+        totalRestante: sumSaldoRestante(abertas, hoje),
+        totalAtrasado: sumSaldoRestante(atrasadas, hoje),
         atrasadas: atrasadas.length,
         proximoVencimento: proximas[0]?.data_vencimento ?? null,
       };
@@ -330,7 +376,8 @@ function ParcelaCard({
   const isPaga = parcela.status === "Pago";
   const isAtrasada = !isPaga && parcela.data_vencimento < hojeStr;
   const atraso = diasAtraso(parcela.data_vencimento, hoje);
-  const saldo = getSaldoParcela(parcela);
+  const saldo = getSaldoParcela(parcela, hoje);
+  const jurosAtraso = getJurosAtrasoPendente(parcela, hoje);
   const valorPago = getValorPago(parcela);
 
   return (
@@ -387,9 +434,16 @@ function ParcelaCard({
         ) : null}
 
         {isAtrasada ? (
-          <p className="border-l-4 border-red-600 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">
-            {atraso} {atraso === 1 ? "dia" : "dias"} de atraso
-          </p>
+          <div className="border-l-4 border-red-600 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">
+            <p>
+              {atraso} {atraso === 1 ? "dia" : "dias"} de atraso
+            </p>
+            {jurosAtraso > 0 ? (
+              <p className="mt-1 text-xs">
+                Juro pendente: {formatCurrency(jurosAtraso)} • {getJurosAtrasoLabel(parcela)}
+              </p>
+            ) : null}
+          </div>
         ) : null}
 
         {isPaga && parcela.data_pagamento ? (
@@ -431,8 +485,9 @@ function ParcelasDoCliente({
           </thead>
           <tbody className="divide-y divide-gray-200">
             {parcelas.map((parcela) => {
-              const saldo = getSaldoParcela(parcela);
+              const saldo = getSaldoParcela(parcela, hoje);
               const valorPago = getValorPago(parcela);
+              const jurosAtraso = getJurosAtrasoPendente(parcela, hoje);
               const isPaga = parcela.status === "Pago";
               const isAtrasada = !isPaga && parcela.data_vencimento < hojeStr;
 
@@ -471,6 +526,11 @@ function ParcelasDoCliente({
                     {isAtrasada ? (
                       <span className="mt-1 block text-xs font-semibold text-red-700">
                         {diasAtraso(parcela.data_vencimento, hoje)} dia(s)
+                      </span>
+                    ) : null}
+                    {jurosAtraso > 0 ? (
+                      <span className="mt-1 block text-xs font-semibold text-red-700">
+                        Juro: {formatCurrency(jurosAtraso)}
                       </span>
                     ) : null}
                   </td>
@@ -574,7 +634,7 @@ function ClienteCard({
               </p>
               <p className="mt-1 text-sm font-bold text-blue-950">
                 Parcela {proximaParcela.numero} • falta{" "}
-                {formatCurrency(getSaldoParcela(proximaParcela))} •{" "}
+                {formatCurrency(getSaldoParcela(proximaParcela, hoje))} •{" "}
                 vence {formatDate(proximaParcela.data_vencimento)}
               </p>
               <p className="mt-1 text-xs font-semibold text-blue-800">
@@ -717,6 +777,7 @@ export default async function Home({ searchParams }: PageProps) {
         numero,
         valor,
         valor_pago,
+        valor_juros_atraso_pago,
         data_vencimento,
         data_pagamento,
         status,
@@ -725,6 +786,8 @@ export default async function Home({ searchParams }: PageProps) {
           id,
           periodicidade_vencimento,
           intervalo_personalizado_dias,
+          juros_atraso_tipo,
+          juros_atraso_valor,
           clientes (
             id,
             nome
@@ -763,6 +826,7 @@ export default async function Home({ searchParams }: PageProps) {
   const visibleClientes = agruparPorCliente({
     todasParcelas: filtradasPorBusca,
     parcelasVisiveis: visibleParcelas,
+    hoje,
     hojeStr,
   });
 
@@ -797,17 +861,17 @@ export default async function Home({ searchParams }: PageProps) {
         <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <SummaryCard
             label="Total a receber"
-            value={formatCurrency(sumSaldoRestante(abertas))}
+            value={formatCurrency(sumSaldoRestante(abertas, hoje))}
             tone="blue"
           />
           <SummaryCard
             label="Atrasado"
-            value={formatCurrency(sumSaldoRestante(atrasadas))}
+            value={formatCurrency(sumSaldoRestante(atrasadas, hoje))}
             tone="red"
           />
           <SummaryCard
             label="A vencer"
-            value={formatCurrency(sumSaldoRestante(aVencer))}
+            value={formatCurrency(sumSaldoRestante(aVencer, hoje))}
             tone="green"
           />
           <SummaryCard
