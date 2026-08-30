@@ -4,6 +4,9 @@ import { FormEvent, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 
+const AUTH_CONFIRM_REDIRECT_URL =
+  "https://gestao-de-emprestimo.vercel.app/auth/confirm";
+
 export function AuthPanel({ allowSignup = false }: { allowSignup?: boolean }) {
   const router = useRouter();
   const supabase = useMemo(() => createSupabaseBrowserClient(), []);
@@ -46,7 +49,7 @@ export function AuthPanel({ allowSignup = false }: { allowSignup?: boolean }) {
               email,
               password,
               options: {
-                emailRedirectTo: `${window.location.origin}/auth/confirm`,
+                emailRedirectTo: AUTH_CONFIRM_REDIRECT_URL,
                 data: {
                   fone,
                 },
