@@ -10,8 +10,13 @@ create table if not exists public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   email text not null,
   fone text not null,
+  status text not null default 'pending',
+  is_admin boolean not null default false,
+  approved_at timestamptz,
+  approved_by uuid references auth.users(id) on delete set null,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
+  constraint profiles_status_check check (status in ('pending', 'approved', 'blocked')),
   constraint profiles_email_format_check check (position('@' in email) > 1),
   constraint profiles_fone_length_check check (
     char_length(regexp_replace(fone, '[^0-9]', '', 'g')) between 10 and 15
@@ -22,15 +27,46 @@ alter table public.profiles enable row level security;
 
 revoke all on table public.profiles from anon;
 revoke all on table public.profiles from authenticated;
-grant select, update on table public.profiles to authenticated;
+grant select on table public.profiles to authenticated;
+
+create or replace function public.is_approved_user()
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select exists (
+    select 1
+    from public.profiles p
+    where p.id = (select auth.uid())
+      and p.status = 'approved'
+  );
+$$;
+
+create or replace function public.is_admin_user()
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select exists (
+    select 1
+    from public.profiles p
+    where p.id = (select auth.uid())
+      and p.status = 'approved'
+      and p.is_admin = true
+  );
+$$;
 
 drop policy if exists "profiles por usuario" on public.profiles;
-create policy "profiles por usuario"
+drop policy if exists "profiles select por usuario ou admin" on public.profiles;
+create policy "profiles select por usuario ou admin"
 on public.profiles
-for all
+for select
 to authenticated
-using (id = (select auth.uid()))
-with check (id = (select auth.uid()));
+using (id = (select auth.uid()) or public.is_admin_user());
 
 create or replace function public.handle_new_user_profile()
 returns trigger
@@ -62,6 +98,73 @@ drop trigger if exists on_auth_user_created_profile on auth.users;
 create trigger on_auth_user_created_profile
 after insert on auth.users
 for each row execute function public.handle_new_user_profile();
+
+create or replace function public.is_approved_user()
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select exists (
+    select 1
+    from public.profiles p
+    where p.id = (select auth.uid())
+      and p.status = 'approved'
+  );
+$$;
+
+create or replace function public.is_admin_user()
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select exists (
+    select 1
+    from public.profiles p
+    where p.id = (select auth.uid())
+      and p.status = 'approved'
+      and p.is_admin = true
+  );
+$$;
+
+create or replace function public.approve_user_access(p_user_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if not public.is_admin_user() then
+    raise exception 'Apenas administradores podem aprovar usuarios.';
+  end if;
+
+  update public.profiles
+  set status = 'approved',
+      approved_at = now(),
+      approved_by = (select auth.uid()),
+      updated_at = now()
+  where id = p_user_id;
+
+  if not found then
+    raise exception 'Usuario nao encontrado.';
+  end if;
+end;
+$$;
+
+revoke all on function public.is_approved_user() from public;
+revoke all on function public.is_approved_user() from anon;
+grant execute on function public.is_approved_user() to authenticated;
+
+revoke all on function public.is_admin_user() from public;
+revoke all on function public.is_admin_user() from anon;
+grant execute on function public.is_admin_user() to authenticated;
+
+revoke all on function public.approve_user_access(uuid) from public;
+revoke all on function public.approve_user_access(uuid) from anon;
+grant execute on function public.approve_user_access(uuid) to authenticated;
 
 -- Backfill dos dados ja existentes para o dono atual.
 -- update public.clientes
@@ -135,8 +238,8 @@ create policy "clientes por usuario"
 on public.clientes
 for all
 to authenticated
-using (user_id = (select auth.uid()))
-with check (user_id = (select auth.uid()));
+using (user_id = (select auth.uid()) and public.is_approved_user())
+with check (user_id = (select auth.uid()) and public.is_approved_user());
 
 drop policy if exists "emprestimos por usuario" on public.emprestimos;
 create policy "emprestimos por usuario"
@@ -144,6 +247,8 @@ on public.emprestimos
 for all
 to authenticated
 using (
+  public.is_approved_user()
+  and
   exists (
     select 1
     from public.clientes c
@@ -152,6 +257,8 @@ using (
   )
 )
 with check (
+  public.is_approved_user()
+  and
   exists (
     select 1
     from public.clientes c
@@ -166,6 +273,8 @@ on public.parcelas
 for all
 to authenticated
 using (
+  public.is_approved_user()
+  and
   exists (
     select 1
     from public.emprestimos e
@@ -175,6 +284,8 @@ using (
   )
 )
 with check (
+  public.is_approved_user()
+  and
   exists (
     select 1
     from public.emprestimos e

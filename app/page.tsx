@@ -5,6 +5,7 @@ import { AuthPanel, SignOutButton } from "./components/AuthPanel";
 import { NovoEmprestimoModal } from "./components/NovoEmprestimoModal";
 import { MarcarPagoButton } from "./components/MarcarPagoButton";
 import { RegistrarPagamentoForm } from "./components/RegistrarPagamentoForm";
+import { aprovarUsuario } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -42,9 +43,19 @@ type ClienteResumo = {
 
 type PageProps = {
   searchParams?: Promise<{
+    convite?: string;
     q?: string;
     view?: string;
   }>;
+};
+
+type UserProfile = {
+  id: string;
+  email: string;
+  fone: string;
+  status: "pending" | "approved" | "blocked" | string;
+  is_admin: boolean;
+  created_at: string;
 };
 
 const viewLabels: Record<ViewFilter, string> = {
@@ -239,6 +250,70 @@ function FilterLink({
     >
       {viewLabels[view]} ({count})
     </a>
+  );
+}
+
+function AccessPending({ email, status }: { email: string; status: string }) {
+  const blocked = status === "blocked";
+
+  return (
+    <main className="grid min-h-screen place-items-center bg-gray-50 px-4">
+      <section className="w-full max-w-md border border-gray-200 bg-white p-6 text-center shadow-sm">
+        <h1 className="text-2xl font-bold text-gray-950">
+          {blocked ? "Acesso bloqueado" : "Aguardando aprovação"}
+        </h1>
+        <p className="mt-3 text-sm font-medium text-gray-600">
+          {blocked
+            ? "Seu usuário não está liberado para acessar este sistema."
+            : "Seu cadastro foi recebido, mas precisa ser autorizado pelo administrador."}
+        </p>
+        <p className="mt-4 border border-gray-200 bg-gray-50 p-3 text-sm font-semibold text-gray-700">
+          {email}
+        </p>
+        <div className="mt-6">
+          <SignOutButton />
+        </div>
+      </section>
+    </main>
+  );
+}
+
+function AdminApprovalPanel({ pendingUsers }: { pendingUsers: UserProfile[] }) {
+  return (
+    <section className="space-y-3 border border-amber-200 bg-amber-50 p-4 shadow-sm">
+      <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+        <h2 className="text-lg font-bold text-amber-950">Usuários aguardando aprovação</h2>
+        <span className="text-sm font-bold text-amber-800">
+          {pendingUsers.length} pendente(s)
+        </span>
+      </div>
+
+      {pendingUsers.length === 0 ? (
+        <p className="text-sm font-semibold text-amber-800">
+          Nenhum usuário pendente no momento.
+        </p>
+      ) : (
+        <div className="divide-y divide-amber-200 border border-amber-200 bg-white">
+          {pendingUsers.map((user) => (
+            <div
+              key={user.id}
+              className="flex flex-col gap-3 p-3 sm:flex-row sm:items-center sm:justify-between"
+            >
+              <div className="min-w-0">
+                <p className="truncate text-sm font-bold text-gray-950">{user.email}</p>
+                <p className="mt-1 text-xs font-semibold text-gray-600">{user.fone}</p>
+              </div>
+              <form action={aprovarUsuario}>
+                <input type="hidden" name="user_id" value={user.id} />
+                <button className="min-h-10 w-full border border-emerald-700 bg-emerald-700 px-4 text-sm font-bold text-white hover:bg-emerald-800 sm:w-auto">
+                  Aprovar acesso
+                </button>
+              </form>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -575,11 +650,16 @@ export default async function Home({ searchParams }: PageProps) {
   const q = (params.q ?? "").trim();
   const normalizedQuery = q.toLocaleLowerCase("pt-BR");
   const activeView = normalizeView(params.view);
+  const inviteCode = process.env.ACCESS_INVITE_CODE ?? "";
+  const hasValidInvite =
+    inviteCode.length > 0 && params.convite === inviteCode;
   const hoje = new Date();
   const hojeStr = formatDateOnly(hoje);
   let parcelas: ParcelaComCliente[] = [];
+  let pendingUsers: UserProfile[] = [];
   let fetchError: string | null = null;
   let userEmail = "";
+  let isAdmin = false;
 
   try {
     const supabase = await createSupabaseServerClient();
@@ -589,10 +669,45 @@ export default async function Home({ searchParams }: PageProps) {
     } = await supabase.auth.getUser();
 
     if (userError || !user) {
-      return <AuthPanel />;
+      return <AuthPanel allowSignup={hasValidInvite} />;
     }
 
     userEmail = user.email ?? "";
+
+    const { data: profile, error: profileError } = await supabase
+      .from("profiles")
+      .select("id, email, fone, status, is_admin, created_at")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    if (profileError) {
+      throw new Error(profileError.message);
+    }
+
+    if (!profile || profile.status !== "approved") {
+      return (
+        <AccessPending
+          email={userEmail}
+          status={profile?.status ?? "pending"}
+        />
+      );
+    }
+
+    isAdmin = Boolean(profile.is_admin);
+
+    if (isAdmin) {
+      const { data: profiles, error: pendingError } = await supabase
+        .from("profiles")
+        .select("id, email, fone, status, is_admin, created_at")
+        .eq("status", "pending")
+        .order("created_at", { ascending: true });
+
+      if (pendingError) {
+        throw new Error(pendingError.message);
+      }
+
+      pendingUsers = (profiles as UserProfile[] | null) ?? [];
+    }
 
     const { data, error } = await supabase
       .from("parcelas")
@@ -676,6 +791,8 @@ export default async function Home({ searchParams }: PageProps) {
             Erro ao carregar dados: {fetchError}
           </div>
         ) : null}
+
+        {isAdmin ? <AdminApprovalPanel pendingUsers={pendingUsers} /> : null}
 
         <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <SummaryCard

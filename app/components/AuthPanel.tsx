@@ -4,7 +4,7 @@ import { FormEvent, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 
-export function AuthPanel() {
+export function AuthPanel({ allowSignup = false }: { allowSignup?: boolean }) {
   const router = useRouter();
   const supabase = useMemo(() => createSupabaseBrowserClient(), []);
   const [isPending, startTransition] = useTransition();
@@ -23,6 +23,11 @@ export function AuthPanel() {
 
     setError(null);
     setMessage(null);
+
+    if (mode === "signup" && !allowSignup) {
+      setError("Cadastro permitido apenas por link de convite.");
+      return;
+    }
 
     if (mode === "signup" && (onlyPhoneDigits.length < 10 || onlyPhoneDigits.length > 15)) {
       setError("Informe um fone valido com DDD.");
@@ -55,7 +60,7 @@ export function AuthPanel() {
       }
 
       if (mode === "signup" && !result.data.session) {
-        setMessage("Cadastro criado. Se o Supabase pedir confirmação de e-mail, confirme antes de entrar.");
+        setMessage("Cadastro criado. Confirme o e-mail e aguarde sua aprovação para acessar.");
         return;
       }
 
@@ -83,30 +88,36 @@ export function AuthPanel() {
           </p>
         </div>
 
-        <div className="mb-5 grid grid-cols-2 border border-gray-300 p-1">
-          <button
-            type="button"
-            onClick={() => changeMode("login")}
-            className={
-              mode === "login"
-                ? "min-h-10 bg-gray-950 px-3 text-sm font-bold text-white"
-                : "min-h-10 px-3 text-sm font-bold text-gray-700 hover:bg-gray-50"
-            }
-          >
-            Entrar
-          </button>
-          <button
-            type="button"
-            onClick={() => changeMode("signup")}
-            className={
-              mode === "signup"
-                ? "min-h-10 bg-gray-950 px-3 text-sm font-bold text-white"
-                : "min-h-10 px-3 text-sm font-bold text-gray-700 hover:bg-gray-50"
-            }
-          >
-            Cadastrar
-          </button>
-        </div>
+        {allowSignup ? (
+          <div className="mb-5 grid grid-cols-2 border border-gray-300 p-1">
+            <button
+              type="button"
+              onClick={() => changeMode("login")}
+              className={
+                mode === "login"
+                  ? "min-h-10 bg-gray-950 px-3 text-sm font-bold text-white"
+                  : "min-h-10 px-3 text-sm font-bold text-gray-700 hover:bg-gray-50"
+              }
+            >
+              Entrar
+            </button>
+            <button
+              type="button"
+              onClick={() => changeMode("signup")}
+              className={
+                mode === "signup"
+                  ? "min-h-10 bg-gray-950 px-3 text-sm font-bold text-white"
+                  : "min-h-10 px-3 text-sm font-bold text-gray-700 hover:bg-gray-50"
+              }
+            >
+              Cadastrar
+            </button>
+          </div>
+        ) : (
+          <div className="mb-5 border border-gray-200 bg-gray-50 p-3 text-sm font-semibold text-gray-600">
+            Cadastro disponível apenas por convite.
+          </div>
+        )}
 
         <form className="space-y-4" onSubmit={handleSubmit}>
           {error ? (
