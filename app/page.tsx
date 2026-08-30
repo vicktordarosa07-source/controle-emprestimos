@@ -772,7 +772,7 @@ export default async function Home({ searchParams }: PageProps) {
         <div className="mx-auto flex max-w-6xl flex-col gap-4 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-xl font-bold text-gray-950 sm:text-2xl">
-              Controle de Empréstimos
+              Gestão de Empréstimo
             </h1>
             <p className="text-sm font-medium text-gray-500">
               {userEmail} • {abertas.length} em aberto • {atrasadas.length} atrasada(s)

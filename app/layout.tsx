@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Controle de Empréstimos - Filipe de Lima",
-  description: "Sistema web de controle de empréstimos",
+  title: "Gestão de Empréstimo",
+  description: "Sistema web de gestão de empréstimo",
 };
 
 export default function RootLayout({

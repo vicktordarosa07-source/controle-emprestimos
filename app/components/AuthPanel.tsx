@@ -79,7 +79,7 @@ export function AuthPanel({ allowSignup = false }: { allowSignup?: boolean }) {
       <section className="w-full max-w-md border border-gray-200 bg-white p-6 shadow-sm">
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-gray-950">
-            Controle de Empréstimos
+            Gestão de Empréstimo
           </h1>
           <p className="mt-2 text-sm font-medium text-gray-600">
             {mode === "login"

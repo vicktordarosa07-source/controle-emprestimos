@@ -1,4 +1,4 @@
-# Controle de Emprestimos
+# Gestão de Empréstimo
 
 Sistema web privado para controle de emprestimos, parcelas, vencimentos e pagamentos.
 
