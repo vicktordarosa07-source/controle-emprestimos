@@ -7,7 +7,15 @@ import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 const AUTH_CONFIRM_REDIRECT_URL =
   "https://gestao-de-emprestimo.vercel.app/auth/confirm";
 
-export function AuthPanel({ allowSignup = false }: { allowSignup?: boolean }) {
+export function AuthPanel({
+  allowSignup = false,
+  inviteEmail = "",
+  inviteToken = "",
+}: {
+  allowSignup?: boolean;
+  inviteEmail?: string;
+  inviteToken?: string;
+}) {
   const router = useRouter();
   const supabase = useMemo(() => createSupabaseBrowserClient(), []);
   const [isPending, startTransition] = useTransition();
@@ -32,6 +40,11 @@ export function AuthPanel({ allowSignup = false }: { allowSignup?: boolean }) {
       return;
     }
 
+    if (mode === "signup" && email.toLocaleLowerCase("pt-BR") !== inviteEmail.toLocaleLowerCase("pt-BR")) {
+      setError("Este convite pertence a outro e-mail.");
+      return;
+    }
+
     if (mode === "signup" && (onlyPhoneDigits.length < 10 || onlyPhoneDigits.length > 15)) {
       setError("Informe um fone valido com DDD.");
       return;
@@ -52,6 +65,7 @@ export function AuthPanel({ allowSignup = false }: { allowSignup?: boolean }) {
                 emailRedirectTo: AUTH_CONFIRM_REDIRECT_URL,
                 data: {
                   fone,
+                  invite_token: inviteToken,
                 },
               },
             })
@@ -122,6 +136,12 @@ export function AuthPanel({ allowSignup = false }: { allowSignup?: boolean }) {
           </div>
         )}
 
+        {allowSignup && mode === "signup" ? (
+          <div className="mb-5 border border-blue-200 bg-blue-50 p-3 text-sm font-semibold text-blue-800">
+            Convite liberado para {inviteEmail}
+          </div>
+        ) : null}
+
         <form className="space-y-4" onSubmit={handleSubmit}>
           {error ? (
             <div className="border border-red-200 bg-red-50 p-3 text-sm font-medium text-red-700">
@@ -139,11 +159,14 @@ export function AuthPanel({ allowSignup = false }: { allowSignup?: boolean }) {
               E-mail
             </label>
             <input
+              key={`${mode}-${inviteEmail}`}
               id="email"
               name="email"
               type="email"
               required
               autoComplete="email"
+              readOnly={mode === "signup" && allowSignup}
+              defaultValue={mode === "signup" && allowSignup ? inviteEmail : ""}
               className="min-h-11 w-full border border-gray-300 px-3 text-sm outline-none focus:border-blue-700 focus:ring-2 focus:ring-blue-100"
             />
           </div>

@@ -1,5 +1,6 @@
 "use server";
 
+import { randomBytes } from "node:crypto";
 import {
   buildParcelas,
   calcularJurosAtraso,
@@ -17,6 +18,8 @@ import {
 } from "@/lib/loan-utils";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { revalidatePath } from "next/cache";
+
+const SITE_URL = "https://gestao-de-emprestimo.vercel.app";
 
 async function requireUser() {
   const supabase = await createSupabaseServerClient();
@@ -225,6 +228,31 @@ export async function atualizarCliente(formData: FormData) {
   }
 
   revalidatePath("/");
+}
+
+export async function gerarConviteCadastro(formData: FormData) {
+  const { supabase } = await requireUser();
+  const email = parseRequiredText(formData.get("email"), "E-mail")
+    .trim()
+    .toLocaleLowerCase("pt-BR");
+
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    throw new Error("Informe um e-mail valido.");
+  }
+
+  const inviteToken = randomBytes(32).toString("base64url");
+  const { error } = await supabase.rpc("create_signup_invite", {
+    p_email: email,
+    p_invite_token: inviteToken,
+  });
+
+  if (error) {
+    throw new Error(`Erro ao gerar convite: ${error.message}`);
+  }
+
+  revalidatePath("/");
+
+  return `${SITE_URL}/?convite=${inviteToken}`;
 }
 
 export async function aprovarUsuario(formData: FormData) {

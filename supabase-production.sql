@@ -15,6 +15,7 @@ create table if not exists public.profiles (
   fone text not null,
   status text not null default 'pending',
   is_admin boolean not null default false,
+  is_dev boolean not null default false,
   approved_at timestamptz,
   approved_by uuid references auth.users(id) on delete set null,
   created_at timestamptz not null default now(),
@@ -31,6 +32,29 @@ alter table public.profiles enable row level security;
 revoke all on table public.profiles from anon;
 revoke all on table public.profiles from authenticated;
 grant select on table public.profiles to authenticated;
+
+alter table public.profiles
+  add column if not exists is_dev boolean not null default false;
+
+create table if not exists public.signup_invites (
+  id uuid primary key default gen_random_uuid(),
+  email text not null,
+  token_hash text not null unique,
+  created_by uuid not null references auth.users(id) on delete cascade,
+  used_at timestamptz,
+  used_by uuid references auth.users(id) on delete set null,
+  created_at timestamptz not null default now(),
+  constraint signup_invites_email_format_check check (position('@' in email) > 1)
+);
+
+alter table public.signup_invites enable row level security;
+
+revoke all on table public.signup_invites from anon;
+revoke all on table public.signup_invites from authenticated;
+grant select, insert, update on table public.signup_invites to authenticated;
+
+create index if not exists signup_invites_email_idx on public.signup_invites (lower(email));
+create index if not exists signup_invites_created_by_idx on public.signup_invites (created_by);
 
 create or replace function public.is_approved_user()
 returns boolean
@@ -63,6 +87,77 @@ as $$
   );
 $$;
 
+create or replace function public.is_dev_user()
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select exists (
+    select 1
+    from public.profiles p
+    where p.id = (select auth.uid())
+      and p.status = 'approved'
+      and p.is_dev = true
+  );
+$$;
+
+drop policy if exists "signup invites por dev" on public.signup_invites;
+create policy "signup invites por dev"
+on public.signup_invites
+for all
+to authenticated
+using (public.is_dev_user())
+with check (public.is_dev_user() and created_by = (select auth.uid()));
+
+create or replace function public.get_signup_invite(p_invite_token text)
+returns table(invite_email text)
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select si.email
+  from public.signup_invites si
+  where si.token_hash = encode(extensions.digest(coalesce(p_invite_token, ''), 'sha256'), 'hex')
+    and si.used_at is null
+  limit 1;
+$$;
+
+create or replace function public.create_signup_invite(
+  p_email text,
+  p_invite_token text
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_id uuid;
+  v_email text := lower(trim(coalesce(p_email, '')));
+begin
+  if not public.is_dev_user() then
+    raise exception 'Apenas usuario dev pode gerar convite.';
+  end if;
+
+  if position('@' in v_email) <= 1 then
+    raise exception 'E-mail invalido.';
+  end if;
+
+  if coalesce(p_invite_token, '') = '' then
+    raise exception 'Token de convite invalido.';
+  end if;
+
+  insert into public.signup_invites (email, token_hash, created_by)
+  values (v_email, encode(extensions.digest(p_invite_token, 'sha256'), 'hex'), (select auth.uid()))
+  returning id into v_id;
+
+  return v_id;
+end;
+$$;
+
 drop policy if exists "profiles por usuario" on public.profiles;
 drop policy if exists "profiles select por usuario ou admin" on public.profiles;
 create policy "profiles select por usuario ou admin"
@@ -77,7 +172,35 @@ language plpgsql
 security definer
 set search_path = ''
 as $$
+declare
+  v_invite record;
+  v_invite_token text := coalesce(new.raw_user_meta_data ->> 'invite_token', '');
+  v_email text := lower(coalesce(new.email, ''));
 begin
+  if v_invite_token = '' then
+    raise exception 'Convite obrigatorio para cadastro.';
+  end if;
+
+  select si.id, si.email
+  into v_invite
+  from public.signup_invites si
+  where si.token_hash = encode(extensions.digest(v_invite_token, 'sha256'), 'hex')
+    and si.used_at is null
+  for update;
+
+  if not found then
+    raise exception 'Convite invalido ou ja utilizado.';
+  end if;
+
+  if lower(v_invite.email) <> v_email then
+    raise exception 'Este convite pertence a outro e-mail.';
+  end if;
+
+  update public.signup_invites
+  set used_at = now(),
+      used_by = new.id
+  where id = v_invite.id;
+
   insert into public.profiles (id, email, fone)
   values (
     new.id,
@@ -164,6 +287,18 @@ grant execute on function public.is_approved_user() to authenticated;
 revoke all on function public.is_admin_user() from public;
 revoke all on function public.is_admin_user() from anon;
 grant execute on function public.is_admin_user() to authenticated;
+
+revoke all on function public.is_dev_user() from public;
+revoke all on function public.is_dev_user() from anon;
+grant execute on function public.is_dev_user() to authenticated;
+
+revoke all on function public.get_signup_invite(text) from public;
+grant execute on function public.get_signup_invite(text) to anon;
+grant execute on function public.get_signup_invite(text) to authenticated;
+
+revoke all on function public.create_signup_invite(text, text) from public;
+revoke all on function public.create_signup_invite(text, text) from anon;
+grant execute on function public.create_signup_invite(text, text) to authenticated;
 
 revoke all on function public.approve_user_access(uuid) from public;
 revoke all on function public.approve_user_access(uuid) from anon;
