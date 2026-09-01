@@ -1,6 +1,7 @@
 "use server";
 
 import { randomBytes } from "node:crypto";
+import type { UserAttributes } from "@supabase/supabase-js";
 import {
   buildParcelas,
   calcularJurosAtraso,
@@ -9,6 +10,7 @@ import {
   parseCpf,
   parseDateOnly,
   parseDueFrequency,
+  parseEmail,
   parseInstallmentCount,
   parseLateInterestType,
   parseNonNegativeNumber,
@@ -232,13 +234,7 @@ export async function atualizarCliente(formData: FormData) {
 
 export async function gerarConviteCadastro(formData: FormData) {
   const { supabase } = await requireUser();
-  const email = parseRequiredText(formData.get("email"), "E-mail")
-    .trim()
-    .toLocaleLowerCase("pt-BR");
-
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    throw new Error("Informe um e-mail valido.");
-  }
+  const email = parseEmail(formData.get("email"));
 
   const inviteToken = randomBytes(32).toString("base64url");
   const { error } = await supabase.rpc("create_signup_invite", {
@@ -253,6 +249,66 @@ export async function gerarConviteCadastro(formData: FormData) {
   revalidatePath("/");
 
   return `${SITE_URL}/?convite=${inviteToken}`;
+}
+
+export async function atualizarConta(formData: FormData) {
+  const { supabase, user } = await requireUser();
+  const email = parseEmail(formData.get("email"));
+  const fone = parsePhone(formData.get("fone"));
+  const password = String(formData.get("password") ?? "");
+  const confirmPassword = String(formData.get("confirm_password") ?? "");
+  const currentEmail = (user.email ?? "").toLocaleLowerCase("pt-BR");
+  const emailChanged = email !== currentEmail;
+  const passwordChanged = password.length > 0 || confirmPassword.length > 0;
+  const updates: UserAttributes = {
+    data: {
+      fone,
+    },
+  };
+
+  if (emailChanged) {
+    updates.email = email;
+  }
+
+  if (passwordChanged) {
+    if (password.length < 6) {
+      throw new Error("A nova senha deve ter pelo menos 6 caracteres.");
+    }
+
+    if (password !== confirmPassword) {
+      throw new Error("As senhas digitadas nao conferem.");
+    }
+
+    updates.password = password;
+  }
+
+  const { error: authError } = await supabase.auth.updateUser(updates, {
+    emailRedirectTo: `${SITE_URL}/auth/confirm`,
+  });
+
+  if (authError) {
+    throw new Error(`Erro ao atualizar conta: ${authError.message}`);
+  }
+
+  const { error: profileError } = await supabase.rpc("update_own_profile_contact", {
+    p_fone: fone,
+  });
+
+  if (profileError) {
+    throw new Error(`Erro ao atualizar telefone: ${profileError.message}`);
+  }
+
+  revalidatePath("/");
+
+  if (emailChanged) {
+    return "Enviamos um link para confirmar o novo e-mail. Depois da confirmação, o e-mail antigo deixa de ser o login desta conta.";
+  }
+
+  if (passwordChanged) {
+    return "Conta atualizada. Sua senha foi alterada.";
+  }
+
+  return "Conta atualizada.";
 }
 
 export async function aprovarUsuario(formData: FormData) {

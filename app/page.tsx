@@ -6,6 +6,7 @@ import { NovoEmprestimoModal } from "./components/NovoEmprestimoModal";
 import { MarcarPagoButton } from "./components/MarcarPagoButton";
 import { RegistrarPagamentoForm } from "./components/RegistrarPagamentoForm";
 import { DeveloperPanel } from "./components/DeveloperPanel";
+import { AccountSettingsPanel } from "./components/AccountSettingsPanel";
 import { aprovarUsuario, atualizarCliente } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -875,6 +876,7 @@ export default async function Home({ searchParams }: PageProps) {
   let signupInvites: SignupInvite[] = [];
   let fetchError: string | null = null;
   let userEmail = "";
+  let userFone = "";
   let isAdmin = false;
   let isDev = false;
 
@@ -927,6 +929,7 @@ export default async function Home({ searchParams }: PageProps) {
 
     isAdmin = Boolean(profile.is_admin);
     isDev = Boolean(profile.is_dev);
+    userFone = profile.fone ?? "";
 
     if (isAdmin) {
       const { data: profiles, error: pendingError } = await supabase
@@ -1044,6 +1047,7 @@ export default async function Home({ searchParams }: PageProps) {
           </div>
         ) : null}
 
+        <AccountSettingsPanel email={userEmail} fone={userFone} />
         {isAdmin ? <AdminApprovalPanel pendingUsers={pendingUsers} /> : null}
         {isDev ? <DeveloperPanel invites={signupInvites} /> : null}
 

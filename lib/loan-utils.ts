@@ -57,6 +57,16 @@ export function parsePhone(value: FormDataEntryValue | null) {
   return raw.trim();
 }
 
+export function parseEmail(value: FormDataEntryValue | null) {
+  const email = parseRequiredText(value, "E-mail").toLocaleLowerCase("pt-BR");
+
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    throw new Error("Informe um e-mail valido");
+  }
+
+  return email;
+}
+
 export function parsePositiveNumber(value: FormDataEntryValue | null, field: string) {
   const raw = parseRequiredText(value, field).replace(",", ".");
 

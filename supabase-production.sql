@@ -225,6 +225,32 @@ create trigger on_auth_user_created_profile
 after insert on auth.users
 for each row execute function public.handle_new_user_profile();
 
+create or replace function public.handle_user_profile_update()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  update public.profiles
+  set email = coalesce(new.email, email),
+      fone = coalesce(new.raw_user_meta_data ->> 'fone', fone),
+      updated_at = now()
+  where id = new.id;
+
+  return new;
+end;
+$$;
+
+revoke all on function public.handle_user_profile_update() from public;
+revoke all on function public.handle_user_profile_update() from anon;
+revoke all on function public.handle_user_profile_update() from authenticated;
+
+drop trigger if exists on_auth_user_updated_profile on auth.users;
+create trigger on_auth_user_updated_profile
+after update of email, raw_user_meta_data on auth.users
+for each row execute function public.handle_user_profile_update();
+
 create or replace function public.is_approved_user()
 returns boolean
 language sql
@@ -280,6 +306,34 @@ begin
 end;
 $$;
 
+create or replace function public.update_own_profile_contact(p_fone text)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_digits text := regexp_replace(coalesce(p_fone, ''), '[^0-9]', '', 'g');
+begin
+  if (select auth.uid()) is null then
+    raise exception 'Sessao expirada.';
+  end if;
+
+  if char_length(v_digits) < 10 or char_length(v_digits) > 15 then
+    raise exception 'Telefone deve ter DDD e entre 10 e 15 digitos.';
+  end if;
+
+  update public.profiles
+  set fone = trim(p_fone),
+      updated_at = now()
+  where id = (select auth.uid());
+
+  if not found then
+    raise exception 'Perfil nao encontrado.';
+  end if;
+end;
+$$;
+
 revoke all on function public.is_approved_user() from public;
 revoke all on function public.is_approved_user() from anon;
 grant execute on function public.is_approved_user() to authenticated;
@@ -303,6 +357,10 @@ grant execute on function public.create_signup_invite(text, text) to authenticat
 revoke all on function public.approve_user_access(uuid) from public;
 revoke all on function public.approve_user_access(uuid) from anon;
 grant execute on function public.approve_user_access(uuid) to authenticated;
+
+revoke all on function public.update_own_profile_contact(text) from public;
+revoke all on function public.update_own_profile_contact(text) from anon;
+grant execute on function public.update_own_profile_contact(text) to authenticated;
 
 -- Backfill dos dados ja existentes para o dono atual.
 -- update public.clientes
