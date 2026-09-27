@@ -12,8 +12,7 @@ import {
   parseDueFrequency,
   parseEmail,
   parseInstallmentCount,
-  parseLateInterestType,
-  parseNonNegativeNumber,
+  parseOptionalText,
   parsePhone,
   parsePositiveNumber,
   parseRequiredText,
@@ -21,7 +20,7 @@ import {
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { revalidatePath } from "next/cache";
 
-const SITE_URL = "https://gestao-de-emprestimo.vercel.app";
+const SITE_URL = "https://controle-emprestimos-project.vercel.app";
 
 async function requireUser() {
   const supabase = await createSupabaseServerClient();
@@ -37,19 +36,14 @@ async function requireUser() {
   return { supabase, user };
 }
 
-export async function criarEmprestimo(formData: FormData) {
+export async function criarCobranca(formData: FormData) {
   const { supabase, user } = await requireUser();
   const nome = parseRequiredText(formData.get("nome"), "Nome do cliente");
-  const endereco = parseRequiredText(formData.get("endereco"), "Endereco");
+  const descricao = parseOptionalText(formData.get("descricao"), 160);
+  const endereco = parseOptionalText(formData.get("endereco"), 240);
   const telefone = parsePhone(formData.get("telefone"));
   const cpf = parseCpf(formData.get("cpf"));
   const valorTotal = parsePositiveNumber(formData.get("valor"), "Valor total");
-  const jurosPercentual = parseNonNegativeNumber(formData.get("juros"), "Juros");
-  const jurosAtrasoTipo = parseLateInterestType(formData.get("juros_atraso_tipo"));
-  const jurosAtrasoValor = parseNonNegativeNumber(
-    formData.get("juros_atraso_valor"),
-    "Juro diario por atraso"
-  );
   const qtdParcelas = parseInstallmentCount(formData.get("qtd_parcelas"));
   const dataPrimeiroVencimento = parseDateOnly(
     formData.get("data_primeiro_vencimento"),
@@ -78,26 +72,26 @@ export async function criarEmprestimo(formData: FormData) {
     .insert({
       cliente_id: cliente.id,
       valor_total: valorTotal,
-      juros_percentual: jurosPercentual,
+      juros_percentual: 0,
       qtd_parcelas: qtdParcelas,
       data_primeiro_vencimento: dataPrimeiroVencimento,
       periodicidade_vencimento: periodicidade,
       intervalo_personalizado_dias: intervaloPersonalizadoDias,
-      juros_atraso_tipo: jurosAtrasoTipo,
-      juros_atraso_valor: jurosAtrasoValor,
+      juros_atraso_tipo: "percentual",
+      juros_atraso_valor: 0,
+      descricao,
     })
     .select()
     .single();
 
   if (emprestimoError || !emprestimo) {
     await supabase.from("clientes").delete().eq("id", cliente.id);
-    throw new Error(`Erro ao criar empréstimo: ${emprestimoError?.message}`);
+    throw new Error(`Erro ao criar cobrança: ${emprestimoError?.message}`);
   }
 
   const parcelasParaInserir = buildParcelas({
     emprestimoId: emprestimo.id,
     valorTotal,
-    jurosPercentual,
     qtdParcelas,
     dataPrimeiroVencimento,
     periodicidade,
@@ -111,7 +105,7 @@ export async function criarEmprestimo(formData: FormData) {
   if (parcelasError) {
     await supabase.from("emprestimos").delete().eq("id", emprestimo.id);
     await supabase.from("clientes").delete().eq("id", cliente.id);
-    throw new Error(`Erro ao criar parcelas: ${parcelasError.message}`);
+    throw new Error(`Erro ao criar cobranças: ${parcelasError.message}`);
   }
 
   revalidatePath("/");
@@ -216,7 +210,7 @@ export async function atualizarCliente(formData: FormData) {
   const { supabase } = await requireUser();
   const clienteId = parseRequiredText(formData.get("cliente_id"), "Cliente");
   const nome = parseRequiredText(formData.get("nome"), "Nome do cliente");
-  const endereco = parseRequiredText(formData.get("endereco"), "Endereco");
+  const endereco = parseOptionalText(formData.get("endereco"), 240);
   const telefone = parsePhone(formData.get("telefone"));
   const cpf = parseCpf(formData.get("cpf"));
 

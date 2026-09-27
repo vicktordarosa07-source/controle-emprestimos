@@ -1,52 +1,35 @@
-# Gestão de Empréstimo
+# Fluxo — gestão de cobranças
 
-Sistema web privado para controle de emprestimos, parcelas, vencimentos e pagamentos.
+Aplicação privada para organizar clientes, cobranças parceladas ou recorrentes, vencimentos e pagamentos. O projeto mantém os nomes históricos das tabelas (`emprestimos` e `parcelas`) para preservar compatibilidade com os dados existentes.
 
 **Stack:** Next.js 16, React 19, TypeScript, Tailwind CSS e Supabase.
 
 ## Funcionalidades
 
-- Login com Supabase Auth.
-- Dashboard financeiro com total a receber, atrasado, a vencer e recebido.
-- Busca por cliente e filtros por parcelas abertas, atrasadas, pagas ou todas.
-- Criacao de emprestimo com validacao server-side.
-- Geracao de parcelas com arredondamento em centavos e datas mensais sem pular mes.
-- Confirmacao antes de marcar pagamento.
-- Desfazer pagamento de parcela paga.
-- RLS recomendado para isolar dados por usuario no Supabase.
+- Login e isolamento de dados por usuário com Supabase Auth/RLS.
+- Dashboard de valores recebidos, em aberto e atrasados, busca e filtros.
+- Cadastro de cobrança com descrição opcional e dados de contato não obrigatórios.
+- Divisão exata do valor total em até 120 ocorrências, sem juros automáticos.
+- Frequência semanal, quinzenal, mensal ou intervalo personalizado de 1 a 365 dias.
+- Registro de pagamentos parciais e totais e opção para reabrir cobrança paga.
+- Histórico de cobranças já existentes continua usando as regras registradas anteriormente.
 
-## Configuracao local
+## Configuração local
 
-1. Copie `.env.example` para `.env.local`.
-2. Preencha as variaveis:
+1. Copie `.env.example` para `.env.local` e configure `NEXT_PUBLIC_SUPABASE_URL` e `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
+2. Instale as dependências e rode `npm run dev`.
 
-```bash
-NEXT_PUBLIC_SUPABASE_URL=sua_url
-NEXT_PUBLIC_SUPABASE_ANON_KEY=sua_anon_key
-```
+## Supabase e migração
 
-3. Instale e rode:
+Para um banco já usado por esta aplicação, execute `supabase-cobrancas.sql` no SQL Editor. É uma alteração aditiva e pode ser reaplicada; ela adiciona a descrição opcional das cobranças sem apagar nem reescrever dados.
 
-```bash
-npm install
-npm run dev
-```
+Para uma instalação nova, primeiro configure o esquema-base descrito em `supabase-production.sql` (incluindo o backfill de `OWNER_USER_ID`, quando aplicável) e depois execute `supabase-cobrancas.sql`. Não execute o esquema-base sobre uma instalação existente sem revisar o arquivo: ele contém passos de configuração inicial que não são uma migração geral idempotente.
 
-## Supabase
+Ative Email/Password em Authentication > Providers e configure os redirects de autenticação para o domínio da aplicação. Cadastros de usuários continuam restritos ao fluxo de convite existente.
 
-Antes de publicar a versao com login, execute `supabase-production.sql` no SQL Editor do Supabase.
+## Pagamentos e Asaas
 
-Passos obrigatorios:
-
-1. Ative Email/Password em Authentication > Providers.
-2. Desative a confirmacao obrigatoria em Authentication > Providers > Email se quiser entrar sem confirmar e-mail.
-3. Crie o usuario dono em Authentication > Users.
-4. Copie o `id` desse usuario.
-5. No arquivo `supabase-production.sql`, substitua `OWNER_USER_ID` no comando de backfill.
-6. Remova o comentario do comando `update public.clientes`.
-7. Execute o SQL inteiro.
-
-Sem essa migracao, a versao nova pode falhar ao criar clientes porque o app grava `clientes.user_id`.
+O app controla vencimentos e pagamentos informados manualmente. Integração com Asaas — criação de cobranças externas, links de pagamento, webhooks e conciliação — ainda não está implementada; não há promessa de que um pagamento lançado aqui tenha sido processado pelo Asaas.
 
 ## Comandos
 
@@ -54,14 +37,8 @@ Sem essa migracao, a versao nova pode falhar ao criar clientes porque o app grav
 npm run dev
 npm run build
 npm run lint
-npm audit --omit=dev
 ```
 
 ## Deploy
 
-Configure as mesmas variaveis no Vercel:
-
-- `NEXT_PUBLIC_SUPABASE_URL`
-- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-
-Depois de aplicar a migracao e configurar as variaveis, publique normalmente na Vercel.
+Configure as variáveis do Supabase no provedor de deploy. Aplique as migrações necessárias no Supabase antes de publicar o código que depende delas.

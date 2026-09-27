@@ -10,7 +10,7 @@ Seu sistema `controle-emprestimos` em `app/page.tsx:1` (Next.js 16 + Supabase em
    - `layout.tsx` adicionado `metadata.manifest`, `appleWebApp`, `viewport` e registro do SW
 
 2. **Capacitor** (`capacitor.config.ts`, `package.json:5`, `android/`, `ios/`)
-   - `appId: com.filipedelima.controleemprestimos`, `appName: Controle Empréstimos`
+   - `appId: com.filipedelima.controleemprestimos` (identificador nativo mantido para atualizar instalações existentes), `appName: Fluxo - Cobranças`
    - Estratégia `server.url: https://controle-emprestimos-project.vercel.app` (reaproveita 100% do Next.js sem `next export`)
    - Alternativa offline: comentar `server.url` e usar `webDir: out` + `output: export` (requer adaptar Supabase para client-only)
 

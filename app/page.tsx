@@ -26,6 +26,7 @@ type ParcelaComCliente = {
   emprestimo_id: string;
   emprestimos: {
     id: string;
+    descricao: string | null;
     periodicidade_vencimento: PeriodicidadeVencimento | null;
     intervalo_personalizado_dias: number | null;
     juros_atraso_tipo: TipoJurosAtraso | null;
@@ -477,7 +478,7 @@ function ParcelaCard({
               {nomeCliente}
             </h3>
             <p className="mt-1 text-sm text-gray-600">
-              Parcela {parcela.numero} de {parcela.emprestimo_id.slice(0, 8)}
+              Cobrança {parcela.numero}{parcela.emprestimos?.descricao ? ` • ${parcela.emprestimos.descricao}` : ""}
             </p>
             <p className="mt-1 text-xs font-semibold uppercase tracking-wide text-gray-500">
               {getPeriodicidadeLabel(parcela)}
@@ -665,7 +666,7 @@ function ClienteCard({
             <div className="min-w-0">
               <h3 className="truncate text-xl font-bold text-gray-950">{cliente.nome}</h3>
               <p className="mt-1 text-sm font-medium text-gray-600">
-                {cliente.parcelas.length} parcela(s) em aberto •{" "}
+                {cliente.parcelas.length} cobrança(s) em aberto •{" "}
                 {cliente.parcelasVisiveis.length} nesta visão
               </p>
               <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs font-semibold text-gray-500">
@@ -761,7 +762,6 @@ function ClienteCard({
               </label>
               <input
                 name="telefone"
-                required
                 inputMode="tel"
                 maxLength={20}
                 defaultValue={cadastro.telefone ?? ""}
@@ -775,7 +775,6 @@ function ClienteCard({
               </label>
               <input
                 name="endereco"
-                required
                 maxLength={240}
                 defaultValue={cadastro.endereco ?? ""}
                 className="mt-1 min-h-10 w-full border border-gray-300 bg-white px-3 text-sm font-semibold outline-none focus:border-blue-700 focus:ring-2 focus:ring-blue-100"
@@ -788,10 +787,10 @@ function ClienteCard({
           <div className="mb-5 flex flex-col gap-3 border border-blue-100 bg-blue-50 p-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <p className="text-xs font-bold uppercase tracking-wide text-blue-700">
-                Próxima parcela
+                Próxima cobrança
               </p>
               <p className="mt-1 text-sm font-bold text-blue-950">
-                Parcela {proximaParcela.numero} • falta{" "}
+                Cobrança {proximaParcela.numero} • falta{" "}
                 {formatCurrency(getSaldoParcela(proximaParcela, hoje))} •{" "}
                 vence {formatDate(proximaParcela.data_vencimento)}
               </p>
@@ -974,6 +973,7 @@ export default async function Home({ searchParams }: PageProps) {
         emprestimo_id,
         emprestimos (
           id,
+          descricao,
           periodicidade_vencimento,
           intervalo_personalizado_dias,
           juros_atraso_tipo,
@@ -1027,7 +1027,7 @@ export default async function Home({ searchParams }: PageProps) {
         <div className="mx-auto flex max-w-6xl flex-col gap-4 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-xl font-bold text-gray-950 sm:text-2xl">
-              Gestão de Empréstimo
+              Fluxo • Gestão de cobranças
             </h1>
             <p className="text-sm font-medium text-gray-500">
               {userEmail} • {abertas.length} em aberto • {atrasadas.length} atrasada(s)

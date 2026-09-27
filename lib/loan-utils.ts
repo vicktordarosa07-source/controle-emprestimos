@@ -9,7 +9,6 @@ export type TipoJurosAtraso = "valor" | "percentual";
 export type InstallmentInput = {
   emprestimoId: string;
   valorTotal: number;
-  jurosPercentual: number;
   qtdParcelas: number;
   dataPrimeiroVencimento: string;
   periodicidade: PeriodicidadeVencimento;
@@ -26,8 +25,6 @@ export type ParcelaInsert = {
 };
 
 const MS_PER_DAY = 1000 * 60 * 60 * 24;
-const DAYS_PER_BILLING_MONTH = 30;
-
 export function parseRequiredText(value: FormDataEntryValue | null, field: string) {
   if (typeof value !== "string" || value.trim().length === 0) {
     throw new Error(`${field} e obrigatorio`);
@@ -36,8 +33,24 @@ export function parseRequiredText(value: FormDataEntryValue | null, field: strin
   return value.trim();
 }
 
+export function parseOptionalText(value: FormDataEntryValue | null, maxLength: number) {
+  const text = typeof value === "string" ? value.trim() : "";
+
+  if (text.length > maxLength) {
+    throw new Error(`O texto deve ter no maximo ${maxLength} caracteres`);
+  }
+
+  return text;
+}
+
 export function parseCpf(value: FormDataEntryValue | null) {
-  const digits = parseRequiredText(value, "CPF").replace(/\D/g, "");
+  const raw = typeof value === "string" ? value.trim() : "";
+
+  if (!raw) {
+    return "";
+  }
+
+  const digits = raw.replace(/\D/g, "");
 
   if (!/^\d{11}$/.test(digits)) {
     throw new Error("CPF deve ter 11 digitos");
@@ -47,7 +60,12 @@ export function parseCpf(value: FormDataEntryValue | null) {
 }
 
 export function parsePhone(value: FormDataEntryValue | null) {
-  const raw = parseRequiredText(value, "Telefone");
+  const raw = typeof value === "string" ? value.trim() : "";
+
+  if (!raw) {
+    return "";
+  }
+
   const digits = raw.replace(/\D/g, "");
 
   if (digits.length < 10 || digits.length > 15) {
@@ -235,72 +253,15 @@ function getDataVencimento({
   return addDays(dataPrimeiroVencimento, diasPorParcela * index);
 }
 
-function getPrazoEmMeses({
-  periodicidade,
-  intervaloPersonalizadoDias,
-  qtdParcelas,
-}: {
-  periodicidade: PeriodicidadeVencimento;
-  intervaloPersonalizadoDias: number | null;
-  qtdParcelas: number;
-}) {
-  if (periodicidade === "mensal") {
-    return qtdParcelas;
-  }
-
-  const diasPorParcela = {
-    semanal: 7,
-    quinzenal: 15,
-    personalizado: intervaloPersonalizadoDias ?? 0,
-  }[periodicidade];
-
-  if (diasPorParcela <= 0) {
-    throw new Error("Intervalo personalizado invalido");
-  }
-
-  return (diasPorParcela * qtdParcelas) / DAYS_PER_BILLING_MONTH;
-}
-
-function calcularTotalComJurosMensal({
-  valorTotal,
-  jurosPercentual,
-  periodicidade,
-  intervaloPersonalizadoDias,
-  qtdParcelas,
-}: {
-  valorTotal: number;
-  jurosPercentual: number;
-  periodicidade: PeriodicidadeVencimento;
-  intervaloPersonalizadoDias: number | null;
-  qtdParcelas: number;
-}) {
-  const prazoEmMeses = getPrazoEmMeses({
-    periodicidade,
-    intervaloPersonalizadoDias,
-    qtdParcelas,
-  });
-  const juros = valorTotal * (jurosPercentual / 100) * prazoEmMeses;
-
-  return valorTotal + juros;
-}
-
 export function buildParcelas({
   emprestimoId,
   valorTotal,
-  jurosPercentual,
   qtdParcelas,
   dataPrimeiroVencimento,
   periodicidade,
   intervaloPersonalizadoDias,
 }: InstallmentInput): ParcelaInsert[] {
-  const totalComJuros = calcularTotalComJurosMensal({
-    valorTotal,
-    jurosPercentual,
-    periodicidade,
-    intervaloPersonalizadoDias,
-    qtdParcelas,
-  });
-  const totalEmCentavos = Math.round(totalComJuros * 100);
+  const totalEmCentavos = Math.round(valorTotal * 100);
   const baseParcela = Math.floor(totalEmCentavos / qtdParcelas);
   const resto = totalEmCentavos % qtdParcelas;
 

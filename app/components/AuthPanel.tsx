@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 
 const AUTH_CONFIRM_REDIRECT_URL =
-  "https://gestao-de-emprestimo.vercel.app/auth/confirm";
+  "https://controle-emprestimos-project.vercel.app/auth/confirm";
 
 export function AuthPanel({
   allowSignup = false,
@@ -96,12 +96,12 @@ export function AuthPanel({
       <section className="w-full max-w-md border border-gray-200 bg-white p-6 shadow-sm">
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-gray-950">
-            Gestão de Empréstimo
+            Fluxo
           </h1>
           <p className="mt-2 text-sm font-medium text-gray-600">
             {mode === "login"
-              ? "Entre para acessar os clientes, parcelas e pagamentos."
-              : "Crie seu acesso para usar o controle de empréstimos."}
+              ? "Entre para gerenciar clientes, cobranças e pagamentos."
+              : "Crie seu acesso para organizar cobranças e vencimentos."}
           </p>
         </div>
 

@@ -1,42 +1,68 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 
 type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>;
   userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
 };
 
+let installedByEvent = false;
+
+function subscribeStandalone(onChange: () => void) {
+  const displayMode = window.matchMedia("(display-mode: standalone)");
+  const handleDisplayModeChange = () => onChange();
+  const handleInstalled = () => {
+    installedByEvent = true;
+    onChange();
+  };
+
+  displayMode.addEventListener("change", handleDisplayModeChange);
+  window.addEventListener("appinstalled", handleInstalled);
+  return () => {
+    displayMode.removeEventListener("change", handleDisplayModeChange);
+    window.removeEventListener("appinstalled", handleInstalled);
+  };
+}
+
+function getStandaloneSnapshot() {
+  const safariStandalone = (navigator as Navigator & { standalone?: boolean }).standalone === true;
+  return window.matchMedia("(display-mode: standalone)").matches || safariStandalone || installedByEvent;
+}
+
+function getIosSafariSnapshot() {
+  const userAgent = window.navigator.userAgent;
+  return /iPhone|iPad|iPod/.test(userAgent) && /^((?!chrome|android).)*safari/i.test(userAgent);
+}
+
+function subscribeToStaticUserAgent() {
+  return () => {};
+}
+
+function getServerSnapshot() {
+  return false;
+}
+
 export function InstallPwaButton() {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
-  const [isIos, setIsIos] = useState(false);
-  const [isStandalone, setIsStandalone] = useState(false);
+  const isIos = useSyncExternalStore(subscribeToStaticUserAgent, getIosSafariSnapshot, getServerSnapshot);
+  const isStandalone = useSyncExternalStore(subscribeStandalone, getStandaloneSnapshot, getServerSnapshot);
   const [showIosHelp, setShowIosHelp] = useState(false);
 
   useEffect(() => {
-    const isStandaloneMode =
-      window.matchMedia("(display-mode: standalone)").matches ||
-      // @ts-ignore iOS
-      window.navigator.standalone === true;
-    setIsStandalone(isStandaloneMode);
-    if (isStandaloneMode) return;
-
-    const ua = window.navigator.userAgent;
-    const ios = /iPhone|iPad|iPod/.test(ua);
-    // @ts-ignore
-    const isSafari = /^((?!chrome|android).)*safari/i.test(ua);
-    setIsIos(ios && isSafari);
+    if (getStandaloneSnapshot()) return;
 
     const handler = (e: Event) => {
       e.preventDefault();
       setDeferredPrompt(e as BeforeInstallPromptEvent);
     };
+    const installedHandler = () => setDeferredPrompt(null);
     window.addEventListener("beforeinstallprompt", handler);
-    window.addEventListener("appinstalled", () => {
-      setDeferredPrompt(null);
-      setIsStandalone(true);
-    });
-    return () => window.removeEventListener("beforeinstallprompt", handler);
+    window.addEventListener("appinstalled", installedHandler);
+    return () => {
+      window.removeEventListener("beforeinstallprompt", handler);
+      window.removeEventListener("appinstalled", installedHandler);
+    };
   }, []);
 
   if (isStandalone) return null;
