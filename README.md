@@ -21,11 +21,11 @@ Aplicação privada para organizar clientes, cobranças parceladas ou recorrente
 
 ## Supabase e migração
 
-Para um banco já usado por esta aplicação, execute `supabase-cobrancas.sql` no SQL Editor. É uma alteração aditiva e pode ser reaplicada; ela adiciona a descrição opcional das cobranças sem apagar nem reescrever dados.
+Para um banco já usado por esta aplicação, execute `supabase-cobrancas.sql` e `supabase-cadastro-aberto.sql` no SQL Editor. A primeira adiciona a descrição opcional das cobranças; a segunda libera novos cadastros e promove perfis pendentes. Ambas preservam dados e papéis de admin/desenvolvedor.
 
-Para uma instalação nova, primeiro configure o esquema-base descrito em `supabase-production.sql` (incluindo o backfill de `OWNER_USER_ID`, quando aplicável) e depois execute `supabase-cobrancas.sql`. Não execute o esquema-base sobre uma instalação existente sem revisar o arquivo: ele contém passos de configuração inicial que não são uma migração geral idempotente.
+Para uma instalação nova, primeiro configure o esquema-base descrito em `supabase-production.sql` (incluindo o backfill de `OWNER_USER_ID`, quando aplicável) e depois execute as duas migrações acima. Não execute o esquema-base sobre uma instalação existente sem revisar o arquivo: ele contém passos de configuração inicial que não são uma migração geral idempotente.
 
-Ative Email/Password em Authentication > Providers e configure os redirects de autenticação para o domínio da aplicação. Cadastros de usuários continuam restritos ao fluxo de convite existente.
+Ative Email/Password e a opção de cadastro de novos usuários em Authentication > Providers. Configure os redirects de autenticação para o domínio da aplicação. O cadastro é público; cada conta nova recebe acesso normal e fica isolada dos dados das outras contas. Usuários anteriormente pendentes são liberados pela migração de cadastro aberto; contas bloqueadas continuam bloqueadas. Se a confirmação de e-mail estiver ativada no Supabase, a pessoa precisará confirmar o endereço antes do primeiro login.
 
 ## Pagamentos e Asaas
 

@@ -172,40 +172,14 @@ language plpgsql
 security definer
 set search_path = ''
 as $$
-declare
-  v_invite record;
-  v_invite_token text := coalesce(new.raw_user_meta_data ->> 'invite_token', '');
-  v_email text := lower(coalesce(new.email, ''));
 begin
-  if v_invite_token = '' then
-    raise exception 'Convite obrigatorio para cadastro.';
-  end if;
-
-  select si.id, si.email
-  into v_invite
-  from public.signup_invites si
-  where si.token_hash = encode(extensions.digest(v_invite_token, 'sha256'), 'hex')
-    and si.used_at is null
-  for update;
-
-  if not found then
-    raise exception 'Convite invalido ou ja utilizado.';
-  end if;
-
-  if lower(v_invite.email) <> v_email then
-    raise exception 'Este convite pertence a outro e-mail.';
-  end if;
-
-  update public.signup_invites
-  set used_at = now(),
-      used_by = new.id
-  where id = v_invite.id;
-
-  insert into public.profiles (id, email, fone)
+  insert into public.profiles (id, email, fone, status, approved_at)
   values (
     new.id,
     coalesce(new.email, ''),
-    coalesce(new.raw_user_meta_data ->> 'fone', '')
+    coalesce(new.raw_user_meta_data ->> 'fone', ''),
+    'approved',
+    now()
   )
   on conflict (id) do update
   set email = excluded.email,

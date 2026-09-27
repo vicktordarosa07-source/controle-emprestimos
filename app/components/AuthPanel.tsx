@@ -7,15 +7,7 @@ import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 const AUTH_CONFIRM_REDIRECT_URL =
   "https://controle-emprestimos-project.vercel.app/auth/confirm";
 
-export function AuthPanel({
-  allowSignup = false,
-  inviteEmail = "",
-  inviteToken = "",
-}: {
-  allowSignup?: boolean;
-  inviteEmail?: string;
-  inviteToken?: string;
-}) {
+export function AuthPanel() {
   const router = useRouter();
   const supabase = useMemo(() => createSupabaseBrowserClient(), []);
   const [isPending, startTransition] = useTransition();
@@ -34,16 +26,6 @@ export function AuthPanel({
 
     setError(null);
     setMessage(null);
-
-    if (mode === "signup" && !allowSignup) {
-      setError("Cadastro permitido apenas por link de convite.");
-      return;
-    }
-
-    if (mode === "signup" && email.toLocaleLowerCase("pt-BR") !== inviteEmail.toLocaleLowerCase("pt-BR")) {
-      setError("Este convite pertence a outro e-mail.");
-      return;
-    }
 
     if (mode === "signup" && (onlyPhoneDigits.length < 10 || onlyPhoneDigits.length > 15)) {
       setError("Informe um fone valido com DDD.");
@@ -65,7 +47,6 @@ export function AuthPanel({
                 emailRedirectTo: AUTH_CONFIRM_REDIRECT_URL,
                 data: {
                   fone,
-                  invite_token: inviteToken,
                 },
               },
             })
@@ -77,7 +58,7 @@ export function AuthPanel({
       }
 
       if (mode === "signup" && !result.data.session) {
-        setMessage("Cadastro criado. Confirme o e-mail e aguarde sua aprovação para acessar.");
+        setMessage("Cadastro criado. Confirme seu e-mail para entrar.");
         return;
       }
 
@@ -105,42 +86,30 @@ export function AuthPanel({
           </p>
         </div>
 
-        {allowSignup ? (
-          <div className="mb-5 grid grid-cols-2 border border-gray-300 p-1">
-            <button
-              type="button"
-              onClick={() => changeMode("login")}
-              className={
-                mode === "login"
-                  ? "min-h-10 bg-gray-950 px-3 text-sm font-bold text-white"
-                  : "min-h-10 px-3 text-sm font-bold text-gray-700 hover:bg-gray-50"
-              }
-            >
-              Entrar
-            </button>
-            <button
-              type="button"
-              onClick={() => changeMode("signup")}
-              className={
-                mode === "signup"
-                  ? "min-h-10 bg-gray-950 px-3 text-sm font-bold text-white"
-                  : "min-h-10 px-3 text-sm font-bold text-gray-700 hover:bg-gray-50"
-              }
-            >
-              Cadastrar
-            </button>
-          </div>
-        ) : (
-          <div className="mb-5 border border-gray-200 bg-gray-50 p-3 text-sm font-semibold text-gray-600">
-            Cadastro disponível apenas por convite.
-          </div>
-        )}
-
-        {allowSignup && mode === "signup" ? (
-          <div className="mb-5 border border-blue-200 bg-blue-50 p-3 text-sm font-semibold text-blue-800">
-            Convite liberado para {inviteEmail}
-          </div>
-        ) : null}
+        <div className="mb-5 grid grid-cols-2 border border-gray-300 p-1">
+          <button
+            type="button"
+            onClick={() => changeMode("login")}
+            className={
+              mode === "login"
+                ? "min-h-10 bg-gray-950 px-3 text-sm font-bold text-white"
+                : "min-h-10 px-3 text-sm font-bold text-gray-700 hover:bg-gray-50"
+            }
+          >
+            Entrar
+          </button>
+          <button
+            type="button"
+            onClick={() => changeMode("signup")}
+            className={
+              mode === "signup"
+                ? "min-h-10 bg-gray-950 px-3 text-sm font-bold text-white"
+                : "min-h-10 px-3 text-sm font-bold text-gray-700 hover:bg-gray-50"
+            }
+          >
+            Cadastrar
+          </button>
+        </div>
 
         <form className="space-y-4" onSubmit={handleSubmit}>
           {error ? (
@@ -159,14 +128,11 @@ export function AuthPanel({
               E-mail
             </label>
             <input
-              key={`${mode}-${inviteEmail}`}
               id="email"
               name="email"
               type="email"
               required
               autoComplete="email"
-              readOnly={mode === "signup" && allowSignup}
-              defaultValue={mode === "signup" && allowSignup ? inviteEmail : ""}
               className="min-h-11 w-full border border-gray-300 px-3 text-sm outline-none focus:border-blue-700 focus:ring-2 focus:ring-blue-100"
             />
           </div>

@@ -5,7 +5,6 @@ import { AuthPanel, SignOutButton } from "./components/AuthPanel";
 import { NovoEmprestimoModal } from "./components/NovoEmprestimoModal";
 import { MarcarPagoButton } from "./components/MarcarPagoButton";
 import { RegistrarPagamentoForm } from "./components/RegistrarPagamentoForm";
-import { DeveloperPanel } from "./components/DeveloperPanel";
 import { AccountSettingsPanel } from "./components/AccountSettingsPanel";
 import { aprovarUsuario, atualizarCliente } from "./actions";
 
@@ -58,7 +57,6 @@ type ClienteResumo = {
 
 type PageProps = {
   searchParams?: Promise<{
-    convite?: string;
     q?: string;
     view?: string;
   }>;
@@ -70,14 +68,6 @@ type UserProfile = {
   fone: string;
   status: "pending" | "approved" | "blocked" | string;
   is_admin: boolean;
-  is_dev: boolean;
-  created_at: string;
-};
-
-type SignupInvite = {
-  id: string;
-  email: string;
-  used_at: string | null;
   created_at: string;
 };
 
@@ -867,29 +857,17 @@ export default async function Home({ searchParams }: PageProps) {
   const q = (params.q ?? "").trim();
   const normalizedQuery = q.toLocaleLowerCase("pt-BR");
   const activeView = normalizeView(params.view);
-  const inviteToken = (params.convite ?? "").trim();
   const hoje = new Date();
   const hojeStr = formatDateOnly(hoje);
   let parcelas: ParcelaComCliente[] = [];
   let pendingUsers: UserProfile[] = [];
-  let signupInvites: SignupInvite[] = [];
   let fetchError: string | null = null;
   let userEmail = "";
   let userFone = "";
   let isAdmin = false;
-  let isDev = false;
 
   try {
     const supabase = await createSupabaseServerClient();
-    let inviteEmail = "";
-
-    if (inviteToken) {
-      const { data: inviteData } = await supabase.rpc("get_signup_invite", {
-        p_invite_token: inviteToken,
-      });
-      inviteEmail = String(inviteData?.[0]?.invite_email ?? "");
-    }
-
     const {
       data: { user },
       error: userError,
@@ -897,11 +875,7 @@ export default async function Home({ searchParams }: PageProps) {
 
     if (userError || !user) {
       return (
-        <AuthPanel
-          allowSignup={Boolean(inviteEmail)}
-          inviteEmail={inviteEmail}
-          inviteToken={inviteToken}
-        />
+        <AuthPanel />
       );
     }
 
@@ -909,7 +883,7 @@ export default async function Home({ searchParams }: PageProps) {
 
     const { data: profile, error: profileError } = await supabase
       .from("profiles")
-      .select("id, email, fone, status, is_admin, is_dev, created_at")
+      .select("id, email, fone, status, is_admin, created_at")
       .eq("id", user.id)
       .maybeSingle();
 
@@ -927,13 +901,12 @@ export default async function Home({ searchParams }: PageProps) {
     }
 
     isAdmin = Boolean(profile.is_admin);
-    isDev = Boolean(profile.is_dev);
     userFone = profile.fone ?? "";
 
     if (isAdmin) {
       const { data: profiles, error: pendingError } = await supabase
         .from("profiles")
-        .select("id, email, fone, status, is_admin, is_dev, created_at")
+        .select("id, email, fone, status, is_admin, created_at")
         .eq("status", "pending")
         .order("created_at", { ascending: true });
 
@@ -942,20 +915,6 @@ export default async function Home({ searchParams }: PageProps) {
       }
 
       pendingUsers = (profiles as UserProfile[] | null) ?? [];
-    }
-
-    if (isDev) {
-      const { data: invites, error: invitesError } = await supabase
-        .from("signup_invites")
-        .select("id, email, used_at, created_at")
-        .order("created_at", { ascending: false })
-        .limit(20);
-
-      if (invitesError) {
-        throw new Error(invitesError.message);
-      }
-
-      signupInvites = (invites as SignupInvite[] | null) ?? [];
     }
 
     const { data, error } = await supabase
@@ -1049,7 +1008,6 @@ export default async function Home({ searchParams }: PageProps) {
 
         <AccountSettingsPanel email={userEmail} fone={userFone} />
         {isAdmin ? <AdminApprovalPanel pendingUsers={pendingUsers} /> : null}
-        {isDev ? <DeveloperPanel invites={signupInvites} /> : null}
 
         <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <SummaryCard
