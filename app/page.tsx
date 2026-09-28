@@ -6,12 +6,15 @@ import { NovoEmprestimoModal } from "./components/NovoEmprestimoModal";
 import { MarcarPagoButton } from "./components/MarcarPagoButton";
 import { RegistrarPagamentoForm } from "./components/RegistrarPagamentoForm";
 import { AccountSettingsPanel } from "./components/AccountSettingsPanel";
+import { ContatoCobrancaForm } from "./components/ContatoCobrancaForm";
+import { ArquivarCobrancaButton } from "./components/ArquivarCobrancaButton";
+import { RestaurarCobrancaButton } from "./components/RestaurarCobrancaButton";
 import { aprovarUsuario, atualizarCliente } from "./actions";
 
 export const dynamic = "force-dynamic";
 
 type ParcelaStatus = "Pendente" | "Pago" | string;
-type ViewFilter = "abertas" | "atrasadas" | "pagas" | "todas";
+type ViewFilter = "abertas" | "atrasadas" | "pagas" | "todas" | "lembretes" | "financeiro" | "historico" | "lixeira";
 
 type ParcelaComCliente = {
   id: string;
@@ -55,10 +58,33 @@ type ClienteResumo = {
   proximoVencimento: string | null;
 };
 
+type PagamentoResumo = {
+  id: string;
+  cliente_id: string;
+  valor_total: number;
+  recebido_em: string;
+  tipo: "recebimento" | "estorno";
+  referencia_pagamento_id: string | null;
+  clientes: Pick<ClienteCadastro, "id" | "nome" | "telefone" | "cpf"> | null;
+  pagamento_itens: { valor_principal: number; valor_juros: number; parcelas: { numero: number } | null }[];
+};
+
+type ContatoResumo = { id: string; parcela_id: string; canal: string; observacao: string; realizado_em: string };
+
+type CobrancaArquivada = {
+  id: string;
+  descricao: string | null;
+  created_at?: string;
+  deleted_at: string;
+  clientes: ClienteCadastro | null;
+  parcelas: { numero: number; valor: number; status: string; data_vencimento: string }[];
+};
+
 type PageProps = {
   searchParams?: Promise<{
     q?: string;
     view?: string;
+    mes?: string;
   }>;
 };
 
@@ -76,6 +102,10 @@ const viewLabels: Record<ViewFilter, string> = {
   atrasadas: "Atrasadas",
   pagas: "Pagas",
   todas: "Todas",
+  lembretes: "Lembretes",
+  financeiro: "Financeiro",
+  historico: "Histórico de pagamentos",
+  lixeira: "Lixeira",
 };
 
 function formatCurrency(value: number) {
@@ -194,7 +224,7 @@ function sumSaldoRestante(parcelas: ParcelaComCliente[], hoje: Date) {
 }
 
 function sumValorPago(parcelas: ParcelaComCliente[]) {
-  return parcelas.reduce((total, parcela) => total + getValorPago(parcela), 0);
+  return parcelas.reduce((total, parcela) => total + getValorPago(parcela) + getValorJurosAtrasoPago(parcela), 0);
 }
 
 function agruparPorCliente({
@@ -261,7 +291,7 @@ function agruparPorCliente({
 }
 
 function normalizeView(value: string | undefined): ViewFilter {
-  if (value === "atrasadas" || value === "pagas" || value === "todas") {
+  if (value === "atrasadas" || value === "pagas" || value === "todas" || value === "lembretes" || value === "financeiro" || value === "historico" || value === "lixeira") {
     return value;
   }
 
@@ -271,9 +301,11 @@ function normalizeView(value: string | undefined): ViewFilter {
 function buildHref({
   view,
   q,
+  mes,
 }: {
   view: ViewFilter;
   q: string;
+  mes?: string;
 }) {
   const params = new URLSearchParams();
   params.set("view", view);
@@ -281,6 +313,7 @@ function buildHref({
   if (q) {
     params.set("q", q);
   }
+  if (mes) params.set("mes", mes);
 
   return `/?${params.toString()}`;
 }
@@ -773,6 +806,16 @@ function ClienteCard({
           </div>
         </form>
 
+        <div className="mb-5 space-y-3 border border-gray-200 p-4">
+          <h4 className="text-sm font-bold text-gray-950">Cobranças deste cliente</h4>
+          {Array.from(new Map(cliente.parcelasVisiveis.map((parcela) => [parcela.emprestimo_id, parcela])).values()).map((parcela) => (
+            <div key={parcela.emprestimo_id} className="flex flex-col justify-between gap-2 border-t border-gray-100 pt-3 sm:flex-row sm:items-center">
+              <div><p className="text-sm font-semibold text-gray-800">{parcela.emprestimos?.descricao || "Cobrança"}</p><p className="text-xs text-gray-500">{cliente.parcelasVisiveis.filter((item) => item.emprestimo_id === parcela.emprestimo_id).length} parcela(s) nesta visão</p></div>
+              <ArquivarCobrancaButton emprestimoId={parcela.emprestimo_id} />
+            </div>
+          ))}
+        </div>
+
         {proximaParcela ? (
           <div className="mb-5 flex flex-col gap-3 border border-blue-100 bg-blue-50 p-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
@@ -855,11 +898,15 @@ function ClientesSection({
 export default async function Home({ searchParams }: PageProps) {
   const params = (await searchParams) ?? {};
   const q = (params.q ?? "").trim();
+  const mesSelecionado = /^\d{4}-\d{2}$/.test(params.mes ?? "") ? params.mes! : new Date().toISOString().slice(0, 7);
   const normalizedQuery = q.toLocaleLowerCase("pt-BR");
   const activeView = normalizeView(params.view);
   const hoje = new Date();
   const hojeStr = formatDateOnly(hoje);
   let parcelas: ParcelaComCliente[] = [];
+  let pagamentos: PagamentoResumo[] = [];
+  let contatos: ContatoResumo[] = [];
+  let arquivadas: CobrancaArquivada[] = [];
   let pendingUsers: UserProfile[] = [];
   let fetchError: string | null = null;
   let userEmail = "";
@@ -930,14 +977,14 @@ export default async function Home({ searchParams }: PageProps) {
         data_pagamento,
         status,
         emprestimo_id,
-        emprestimos (
+        emprestimos!inner (
           id,
           descricao,
           periodicidade_vencimento,
           intervalo_personalizado_dias,
           juros_atraso_tipo,
           juros_atraso_valor,
-          clientes (
+          clientes!inner (
             id,
             nome,
             endereco,
@@ -947,6 +994,8 @@ export default async function Home({ searchParams }: PageProps) {
         )
       `
       )
+      .is("emprestimos.deleted_at", null)
+      .is("emprestimos.clientes.deleted_at", null)
       .order("data_vencimento", { ascending: true });
 
     if (error) {
@@ -954,6 +1003,18 @@ export default async function Home({ searchParams }: PageProps) {
     }
 
     parcelas = (data as unknown as ParcelaComCliente[]) || [];
+
+    const [pagamentosResult, contatosResult, arquivadasResult] = await Promise.all([
+      supabase.from("pagamentos").select("id, cliente_id, valor_total, recebido_em, tipo, referencia_pagamento_id, clientes(id, nome, telefone, cpf), pagamento_itens(valor_principal, valor_juros, parcelas(numero))").order("recebido_em", { ascending: false }),
+      supabase.from("cobranca_contatos").select("id, parcela_id, canal, observacao, realizado_em").order("realizado_em", { ascending: false }),
+      supabase.from("emprestimos").select("id, descricao, deleted_at, clientes!inner(id, nome, telefone, cpf, endereco), parcelas(numero, valor, status, data_vencimento)").not("deleted_at", "is", null).order("deleted_at", { ascending: false }),
+    ]);
+    if (pagamentosResult.error) throw new Error(pagamentosResult.error.message);
+    if (contatosResult.error) throw new Error(contatosResult.error.message);
+    if (arquivadasResult.error) throw new Error(arquivadasResult.error.message);
+    pagamentos = (pagamentosResult.data ?? []) as unknown as PagamentoResumo[];
+    contatos = (contatosResult.data ?? []) as unknown as ContatoResumo[];
+    arquivadas = (arquivadasResult.data ?? []) as unknown as CobrancaArquivada[];
   } catch (error) {
     fetchError = (error as Error).message;
   }
@@ -966,13 +1027,35 @@ export default async function Home({ searchParams }: PageProps) {
   const abertas = filtradasPorBusca.filter((parcela) => parcela.status !== "Pago");
   const atrasadas = abertas.filter((parcela) => parcela.data_vencimento < hojeStr);
   const aVencer = abertas.filter((parcela) => parcela.data_vencimento >= hojeStr);
+  const limiteLembretes = new Date(hoje);
+  limiteLembretes.setDate(limiteLembretes.getDate() + 7);
+  const limiteLembretesStr = formatDateOnly(limiteLembretes);
+  const lembretes = abertas.filter((parcela) => parcela.data_vencimento <= limiteLembretesStr);
+  const mesInicio = `${mesSelecionado}-01`;
+  const [anoMesAno, anoMesMes] = mesSelecionado.split("-").map(Number);
+  const proximoMes = new Date(anoMesAno, anoMesMes, 1);
+  const mesFim = formatDateOnly(new Date(proximoMes.getFullYear(), proximoMes.getMonth(), 0));
+  const mesAnterior = new Date(anoMesAno, anoMesMes - 2, 1).toISOString().slice(0, 7);
+  const pagamentosFiltrados = pagamentos.filter((p) => {
+    if (!normalizedQuery) return true;
+    const client = p.clientes;
+    const text = `${client?.nome ?? ""} ${client?.telefone ?? ""} ${client?.cpf ?? ""}`.toLocaleLowerCase("pt-BR");
+    const digits = normalizedQuery.replace(/\D/g, "");
+    return text.includes(normalizedQuery) || (digits.length > 0 && `${client?.telefone ?? ""} ${client?.cpf ?? ""}`.replace(/\D/g, "").includes(digits));
+  });
+  const recebimentosDoMes = pagamentosFiltrados.filter((p) => p.recebido_em.startsWith(mesSelecionado));
+  const recebimentosMesAnterior = pagamentosFiltrados.filter((p) => p.recebido_em.startsWith(mesAnterior));
+  const recebidoMes = recebimentosDoMes.reduce((sum, p) => sum + (p.tipo === "estorno" ? -1 : 1) * Number(p.valor_total), 0);
+  const recebidoMesAnterior = recebimentosMesAnterior.reduce((sum, p) => sum + (p.tipo === "estorno" ? -1 : 1) * Number(p.valor_total), 0);
+  const cobrancasDoMes = filtradasPorBusca.filter((p) => p.data_vencimento >= mesInicio && p.data_vencimento <= mesFim);
+  const historicoFiltrado = pagamentosFiltrados;
 
-  const visibleParcelas = {
+  const visibleParcelas = ({
     abertas,
     atrasadas,
     pagas,
     todas: filtradasPorBusca,
-  }[activeView];
+  } as Partial<Record<ViewFilter, ParcelaComCliente[]>>)[activeView] ?? filtradasPorBusca;
   const visibleClientes = agruparPorCliente({
     todasParcelas: filtradasPorBusca,
     parcelasVisiveis: visibleParcelas,
@@ -1032,7 +1115,72 @@ export default async function Home({ searchParams }: PageProps) {
           />
         </section>
 
-        <section className="space-y-3 border border-gray-200 bg-white p-4 shadow-sm">
+        <nav aria-label="Áreas do sistema" className="flex flex-wrap gap-2 border border-gray-200 bg-white p-3">
+          {(["abertas", "lembretes", "financeiro", "historico", "lixeira"] as ViewFilter[]).map((view) => (
+            <a key={view} href={buildHref({ view, q, mes: view === "financeiro" ? mesSelecionado : undefined })}
+              aria-current={activeView === view ? "page" : undefined}
+              className={`min-h-10 px-4 py-2 text-sm font-bold ${activeView === view ? "bg-blue-700 text-white" : "border border-gray-300 text-gray-700 hover:bg-gray-50"}`}>
+              {viewLabels[view]}
+              {view === "lembretes" ? ` (${lembretes.length})` : view === "lixeira" ? ` (${arquivadas.length})` : ""}
+            </a>
+          ))}
+          <a href="/api/export" className="min-h-10 border border-gray-300 px-4 py-2 text-sm font-bold text-gray-700 hover:bg-gray-50">Exportar cobranças CSV</a>
+          <a href="/api/export?tipo=pagamentos" className="min-h-10 border border-gray-300 px-4 py-2 text-sm font-bold text-gray-700 hover:bg-gray-50">Exportar pagamentos CSV</a>
+          <a href="/api/export?formato=json" className="min-h-10 border border-gray-300 px-4 py-2 text-sm font-bold text-gray-700 hover:bg-gray-50">Baixar backup JSON</a>
+        </nav>
+
+        {activeView === "financeiro" ? (
+          <section className="space-y-4">
+            <div className="flex flex-col gap-3 border border-gray-200 bg-white p-4 sm:flex-row sm:items-end sm:justify-between">
+              <div><h2 className="text-lg font-bold text-gray-950">Resumo financeiro</h2><p className="text-sm text-gray-600">Entradas usam a data real do pagamento. O histórico mensal detalhado começa após a migração.</p></div>
+              <form action="/" className="flex items-end gap-2"><input type="hidden" name="view" value="financeiro" /><label className="text-xs font-bold text-gray-600">Período<input name="mes" type="month" defaultValue={mesSelecionado} className="mt-1 block min-h-10 border border-gray-300 px-3 text-sm" /></label><button className="min-h-10 bg-blue-700 px-4 text-sm font-bold text-white">Aplicar</button></form>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <SummaryCard label="Recebido no mês" value={formatCurrency(recebidoMes)} tone="green" />
+              <SummaryCard label="Recebido no mês anterior" value={formatCurrency(recebidoMesAnterior)} tone="gray" />
+              <SummaryCard label="Em aberto com vencimento no mês" value={formatCurrency(sumSaldoRestante(cobrancasDoMes.filter((p) => p.status !== "Pago"), hoje))} tone="blue" />
+              <SummaryCard label="Atrasado agora" value={formatCurrency(sumSaldoRestante(atrasadas, hoje))} tone="red" />
+            </div>
+            <p className="border border-gray-200 bg-white p-4 text-sm text-gray-600">
+              {recebidoMesAnterior > 0 ? `Variação de recebimentos: ${((recebidoMes - recebidoMesAnterior) / recebidoMesAnterior * 100).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}% em relação ao mês anterior.` : recebidoMes > 0 ? "Não há recebimentos registrados no mês anterior para comparação." : "Nenhum recebimento registrado neste mês."}
+            </p>
+          </section>
+        ) : null}
+
+        {activeView === "lembretes" ? (
+          <section className="space-y-3">
+            <div><h2 className="text-lg font-bold text-gray-950">Atenção para hoje e próximos 7 dias</h2><p className="text-sm text-gray-600">Sem envio automático: registre quando fizer um contato manualmente.</p></div>
+            {lembretes.length === 0 ? <div className="border border-gray-200 bg-white p-6 text-sm text-gray-600">Nenhuma cobrança vencida ou próxima do vencimento.</div> : lembretes.map((parcela) => {
+              const historicoContato = contatos.filter((item) => item.parcela_id === parcela.id).slice(0, 3);
+              return <article key={parcela.id} className="space-y-3 border border-gray-200 bg-white p-4">
+                <div className="flex flex-col justify-between gap-2 sm:flex-row"><div><h3 className="font-bold text-gray-950">{getNomeCliente(parcela)} · parcela {parcela.numero}</h3><p className="text-sm text-gray-600">Vencimento {formatDate(parcela.data_vencimento)} · {parcela.data_vencimento < hojeStr ? `${diasAtraso(parcela.data_vencimento, hoje)} dia(s) de atraso` : parcela.data_vencimento === hojeStr ? "vence hoje" : "próximos 7 dias"}</p></div><p className="font-bold text-red-700">{formatCurrency(getSaldoParcela(parcela, hoje))}</p></div>
+                {historicoContato.length ? <ul className="space-y-1 text-xs text-gray-500">{historicoContato.map((item) => <li key={item.id}>{new Date(item.realizado_em).toLocaleString("pt-BR")} · {item.canal}{item.observacao ? ` · ${item.observacao}` : ""}</li>)}</ul> : <p className="text-xs text-gray-500">Nenhum contato registrado.</p>}
+                <ContatoCobrancaForm parcelaId={parcela.id} />
+              </article>;
+            })}
+          </section>
+        ) : null}
+
+        {activeView === "historico" ? (
+          <section className="space-y-3">
+            <div><h2 className="text-lg font-bold text-gray-950">Histórico de pagamentos</h2><p className="text-sm text-gray-600">Pagamentos e rateios registrados a partir da ativação do histórico.</p></div>
+            <form action="/" className="flex gap-2 border border-gray-200 bg-white p-3"><input type="hidden" name="view" value="historico" /><input name="q" defaultValue={q} placeholder="Filtrar cliente, CPF ou telefone" className="min-h-10 flex-1 border border-gray-300 px-3 text-sm" /><button className="bg-blue-700 px-4 text-sm font-bold text-white">Buscar</button></form>
+            {historicoFiltrado.length === 0 ? <div className="border border-gray-200 bg-white p-6 text-sm text-gray-600">Ainda não há pagamentos registrados para exibir.</div> : historicoFiltrado.map((pagamento) => {
+              return <article key={pagamento.id} className="border border-gray-200 bg-white p-4">
+                <div className="flex justify-between gap-3"><div><h3 className="font-bold text-gray-950">{pagamento.tipo === "estorno" ? "Estorno · " : ""}{pagamento.clientes?.nome ?? "Cliente arquivado"}</h3><p className="text-sm text-gray-500">{pagamento.tipo === "estorno" ? "Estornado em " : "Recebido em "}{formatDate(pagamento.recebido_em)}</p></div><strong className={pagamento.tipo === "estorno" ? "text-red-700" : "text-emerald-700"}>{pagamento.tipo === "estorno" ? "−" : "+"}{formatCurrency(Number(pagamento.valor_total))}</strong></div>
+                <ul className="mt-3 space-y-1 text-xs text-gray-600">{pagamento.pagamento_itens.map((item, index) => <li key={`${pagamento.id}-${index}`}>{pagamento.tipo === "estorno" ? "Estorno da parcela" : `Parcela ${item.parcelas?.numero ?? "—"}`}: principal {formatCurrency(Number(item.valor_principal))} + juros {formatCurrency(Number(item.valor_juros))}</li>)}</ul>
+              </article>;
+            })}
+          </section>
+        ) : null}
+
+        {activeView === "lixeira" ? (
+          <section className="space-y-3"><div><h2 className="text-lg font-bold text-gray-950">Cobranças arquivadas</h2><p className="text-sm text-gray-600">Arquivar não apaga dados nem altera pagamentos; restaurar traz a cobrança de volta aos totais.</p></div>
+            {arquivadas.length === 0 ? <div className="border border-gray-200 bg-white p-6 text-sm text-gray-600">A lixeira está vazia.</div> : arquivadas.map((item) => { const cliente = Array.isArray(item.clientes) ? item.clientes[0] : item.clientes; return <article key={item.id} className="flex flex-col justify-between gap-4 border border-gray-200 bg-white p-4 sm:flex-row sm:items-center"><div><h3 className="font-bold text-gray-950">{cliente?.nome ?? "Cliente"} · {item.descricao || "Cobrança"}</h3><p className="text-sm text-gray-500">Arquivada em {new Date(item.deleted_at).toLocaleDateString("pt-BR")} · {item.parcelas?.length ?? 0} parcelas</p></div><RestaurarCobrancaButton emprestimoId={item.id} /></article>; })}
+          </section>
+        ) : null}
+
+        {(["abertas", "atrasadas", "pagas", "todas"].includes(activeView)) ? <section className="space-y-3 border border-gray-200 bg-white p-4 shadow-sm">
           <form className="flex flex-col gap-3 md:flex-row" action="/">
             <input type="hidden" name="view" value={activeView} />
             <label className="sr-only" htmlFor="search-client">
@@ -1076,14 +1224,14 @@ export default async function Home({ searchParams }: PageProps) {
               count={filtradasPorBusca.length}
             />
           </div>
-        </section>
+        </section> : null}
 
-        <ClientesSection
+        {(["abertas", "atrasadas", "pagas", "todas"].includes(activeView)) ? <ClientesSection
           title={viewLabels[activeView]}
           clientes={visibleClientes}
           hoje={hoje}
           hojeStr={hojeStr}
-        />
+        /> : null}
       </div>
     </main>
   );

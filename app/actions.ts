@@ -4,8 +4,6 @@ import { randomBytes } from "node:crypto";
 import type { UserAttributes } from "@supabase/supabase-js";
 import {
   buildParcelas,
-  calcularJurosAtraso,
-  formatDateOnly,
   parseCustomIntervalDays,
   parseCpf,
   parseDateOnly,
@@ -113,54 +111,9 @@ export async function criarCobranca(formData: FormData) {
 
 export async function marcarComoPago(parcelaId: string) {
   const { supabase } = await requireUser();
-  const hoje = new Date();
-  const hojeStr = formatDateOnly(hoje);
-
-  const { data: parcela, error: parcelaError } = await supabase
-    .from("parcelas")
-    .select(
-      `
-      valor,
-      valor_pago,
-      data_vencimento,
-      emprestimos (
-        juros_atraso_tipo,
-        juros_atraso_valor
-      )
-    `
-    )
-    .eq("id", parcelaId)
-    .eq("status", "Pendente")
-    .single();
-
-  if (parcelaError || !parcela) {
-    throw new Error(`Erro ao buscar parcela: ${parcelaError?.message ?? "parcela nao encontrada"}`);
-  }
-
-  const valorParcela = Number(parcela.valor);
-  const valorPago = Number(parcela.valor_pago ?? 0);
-  const saldoPrincipal = Math.max(valorParcela - valorPago, 0);
-  const emprestimo = Array.isArray(parcela.emprestimos)
-    ? parcela.emprestimos[0]
-    : parcela.emprestimos;
-  const jurosAtraso = calcularJurosAtraso({
-    saldoPrincipal,
-    dataVencimento: String(parcela.data_vencimento),
-    hoje,
-    tipo: emprestimo?.juros_atraso_tipo === "valor" ? "valor" : "percentual",
-    valorDiario: Number(emprestimo?.juros_atraso_valor ?? 0),
+  const { error } = await supabase.rpc("registrar_pagamento_parcela", {
+    p_parcela_id: parcelaId,
   });
-
-  const { error } = await supabase
-    .from("parcelas")
-    .update({
-      status: "Pago",
-      data_pagamento: hojeStr,
-      valor_pago: valorParcela,
-      valor_juros_atraso_pago: jurosAtraso,
-    })
-    .eq("id", parcelaId)
-    .eq("status", "Pendente");
 
   if (error) {
     throw new Error(`Erro ao marcar como pago: ${error.message}`);
@@ -171,17 +124,9 @@ export async function marcarComoPago(parcelaId: string) {
 
 export async function reabrirParcela(parcelaId: string) {
   const { supabase } = await requireUser();
-
-  const { error } = await supabase
-    .from("parcelas")
-    .update({
-      status: "Pendente",
-      data_pagamento: null,
-      valor_pago: 0,
-      valor_juros_atraso_pago: 0,
-    })
-    .eq("id", parcelaId)
-    .eq("status", "Pago");
+  const { error } = await supabase.rpc("reabrir_parcela", {
+    p_parcela_id: parcelaId,
+  });
 
   if (error) {
     throw new Error(`Erro ao reabrir parcela: ${error.message}`);
@@ -223,6 +168,38 @@ export async function atualizarCliente(formData: FormData) {
     throw new Error(`Erro ao atualizar cliente: ${error.message}`);
   }
 
+  revalidatePath("/");
+}
+
+export async function registrarContatoCobranca(formData: FormData) {
+  const { supabase } = await requireUser();
+  const parcelaId = parseRequiredText(formData.get("parcela_id"), "Cobrança");
+  const canal = String(formData.get("canal") ?? "manual");
+  const observacao = parseOptionalText(formData.get("observacao"), 500);
+  const { error } = await supabase.rpc("registrar_contato_cobranca", {
+    p_parcela_id: parcelaId,
+    p_canal: canal,
+    p_observacao: observacao,
+  });
+  if (error) throw new Error(`Erro ao registrar contato: ${error.message}`);
+  revalidatePath("/");
+}
+
+export async function arquivarCobranca(emprestimoId: string) {
+  const { supabase } = await requireUser();
+  const { error } = await supabase.rpc("arquivar_cobranca", {
+    p_emprestimo_id: emprestimoId,
+  });
+  if (error) throw new Error(`Erro ao arquivar cobrança: ${error.message}`);
+  revalidatePath("/");
+}
+
+export async function restaurarCobranca(emprestimoId: string) {
+  const { supabase } = await requireUser();
+  const { error } = await supabase.rpc("restaurar_cobranca", {
+    p_emprestimo_id: emprestimoId,
+  });
+  if (error) throw new Error(`Erro ao restaurar cobrança: ${error.message}`);
   revalidatePath("/");
 }
 

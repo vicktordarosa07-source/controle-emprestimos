@@ -12,6 +12,9 @@ Aplicação privada para organizar clientes, cobranças parceladas ou recorrente
 - Divisão exata do valor total em até 120 ocorrências, sem juros automáticos.
 - Frequência semanal, quinzenal, mensal ou intervalo personalizado de 1 a 365 dias.
 - Registro de pagamentos parciais e totais e opção para reabrir cobrança paga.
+- Fila de lembretes para parcelas vencidas, do dia e dos próximos 7 dias, com registro manual de contatos.
+- Resumo financeiro mensal, comparação com o mês anterior e histórico de rateio dos pagamentos.
+- Arquivamento recuperável de cobranças pela Lixeira; exportação CSV compatível com Excel e backup JSON.
 - Histórico de cobranças já existentes continua usando as regras registradas anteriormente.
 
 ## Configuração local
@@ -21,7 +24,9 @@ Aplicação privada para organizar clientes, cobranças parceladas ou recorrente
 
 ## Supabase e migração
 
-Para um banco já usado por esta aplicação, execute `supabase-cobrancas.sql` e `supabase-cadastro-aberto.sql` no SQL Editor. A primeira adiciona a descrição opcional das cobranças; a segunda libera novos cadastros e promove perfis pendentes. Ambas preservam dados e papéis de admin/desenvolvedor.
+Para um banco já usado por esta aplicação, execute `supabase-cobrancas.sql`, `supabase-cadastro-aberto.sql` e `supabase-recursos-operacionais.sql` no SQL Editor. A migração operacional adiciona histórico transacional, contatos e campos de arquivamento sem apagar dados existentes. **Aplique-a antes de publicar o código que usa os novos recursos.**
+
+Pagamentos anteriores à migração continuam nos saldos existentes, mas não é possível reconstruir com precisão o histórico de cada recebimento parcial nem sua data; o novo livro-caixa registra as movimentações feitas após a migração. O backup JSON é uma exportação para guarda externa, não um importador automático. A lixeira recupera cobranças arquivadas dentro do app.
 
 Para uma instalação nova, primeiro configure o esquema-base descrito em `supabase-production.sql` (incluindo o backfill de `OWNER_USER_ID`, quando aplicável) e depois execute as duas migrações acima. Não execute o esquema-base sobre uma instalação existente sem revisar o arquivo: ele contém passos de configuração inicial que não são uma migração geral idempotente.
 

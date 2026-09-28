@@ -15,7 +15,7 @@ export function MarcarPagoButton({ parcelaId, status = "Pendente" }: Props) {
 
   function handleClick() {
     const message = isPago
-      ? "Reabrir esta parcela como pendente?"
+      ? "Reabrir esta parcela? O histórico será preservado com um estorno."
       : "Confirmar pagamento desta parcela?";
 
     if (!window.confirm(message)) {
