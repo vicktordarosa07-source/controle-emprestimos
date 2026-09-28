@@ -9,6 +9,8 @@ import { AccountSettingsPanel } from "./components/AccountSettingsPanel";
 import { ContatoCobrancaForm } from "./components/ContatoCobrancaForm";
 import { ArquivarCobrancaButton } from "./components/ArquivarCobrancaButton";
 import { RestaurarCobrancaButton } from "./components/RestaurarCobrancaButton";
+import { MfaPanel } from "./components/MfaPanel";
+import { AsaasChargeButton } from "./components/AsaasChargeButton";
 import { aprovarUsuario, atualizarCliente } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -562,6 +564,7 @@ function ParcelaCard({
       </div>
 
       <MarcarPagoButton parcelaId={parcela.id} status={parcela.status} />
+      {!isPaga ? <AsaasChargeButton parcelaId={parcela.id} /> : null}
     </article>
   );
 }
@@ -647,6 +650,7 @@ function ParcelasDoCliente({
                   </td>
                   <td className="px-4 py-3">
                     <MarcarPagoButton parcelaId={parcela.id} status={parcela.status} />
+                    {!isPaga ? <AsaasChargeButton parcelaId={parcela.id} /> : null}
                   </td>
                 </tr>
               );
@@ -911,6 +915,7 @@ export default async function Home({ searchParams }: PageProps) {
   let fetchError: string | null = null;
   let userEmail = "";
   let userFone = "";
+  let emailRemindersEnabled = false;
   let isAdmin = false;
 
   try {
@@ -926,11 +931,25 @@ export default async function Home({ searchParams }: PageProps) {
       );
     }
 
+    const { data: assurance, error: assuranceError } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+    if (assuranceError) throw new Error(`Erro ao verificar autenticação: ${assuranceError.message}`);
+    if (assurance.nextLevel === "aal2" && assurance.currentLevel !== "aal2") {
+      return (
+        <main className="grid min-h-screen place-items-center bg-gray-50 px-4">
+          <section className="w-full max-w-md space-y-4 border border-gray-200 bg-white p-6 shadow-sm">
+            <h1 className="text-xl font-bold text-gray-950">Verificação em duas etapas</h1>
+            <MfaPanel challengeOnly />
+            <SignOutButton />
+          </section>
+        </main>
+      );
+    }
+
     userEmail = user.email ?? "";
 
     const { data: profile, error: profileError } = await supabase
       .from("profiles")
-      .select("id, email, fone, status, is_admin, created_at")
+      .select("id, email, fone, status, is_admin, created_at, email_reminders_enabled")
       .eq("id", user.id)
       .maybeSingle();
 
@@ -949,6 +968,7 @@ export default async function Home({ searchParams }: PageProps) {
 
     isAdmin = Boolean(profile.is_admin);
     userFone = profile.fone ?? "";
+    emailRemindersEnabled = Boolean(profile.email_reminders_enabled);
 
     if (isAdmin) {
       const { data: profiles, error: pendingError } = await supabase
@@ -1089,7 +1109,7 @@ export default async function Home({ searchParams }: PageProps) {
           </div>
         ) : null}
 
-        <AccountSettingsPanel email={userEmail} fone={userFone} />
+        <AccountSettingsPanel email={userEmail} fone={userFone} emailRemindersEnabled={emailRemindersEnabled} />
         {isAdmin ? <AdminApprovalPanel pendingUsers={pendingUsers} /> : null}
 
         <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">

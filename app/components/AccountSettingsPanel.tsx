@@ -1,14 +1,19 @@
 "use client";
 
 import { useRef, useState, useTransition } from "react";
-import { atualizarConta } from "@/app/actions";
+import { atualizarConta, atualizarPreferenciasEmail } from "@/app/actions";
+import { MfaPanel } from "./MfaPanel";
+import { BackupRestoreForm } from "./BackupRestoreForm";
+import { AsaasSettingsPanel } from "./AsaasSettingsPanel";
+import { SubscriptionPanel } from "./SubscriptionPanel";
 
 type Props = {
   email: string;
   fone: string;
+  emailRemindersEnabled: boolean;
 };
 
-export function AccountSettingsPanel({ email, fone }: Props) {
+export function AccountSettingsPanel({ email, fone, emailRemindersEnabled }: Props) {
   const [isPending, startTransition] = useTransition();
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -35,7 +40,7 @@ export function AccountSettingsPanel({ email, fone }: Props) {
         <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
           <h2 className="text-lg font-bold text-gray-950">Configuração de conta</h2>
           <span className="text-sm font-semibold text-gray-500">
-            E-mail, telefone e senha
+          Conta, segurança e lembretes
           </span>
         </div>
       </summary>
@@ -121,6 +126,34 @@ export function AccountSettingsPanel({ email, fone }: Props) {
           </button>
         </div>
       </form>
+
+      <section className="border-t border-gray-200 p-4">
+        <h3 className="font-bold text-gray-950">Resumo diário por e-mail</h3>
+        <p className="mt-1 text-sm text-gray-600">Enviado para {email}; inclui cobranças vencidas e próximas. O envio só funciona após configurar Resend e o cron da Vercel.</p>
+        <form action={atualizarPreferenciasEmail} className="mt-3 flex items-center justify-between gap-4">
+          <label className="flex items-start gap-2 text-sm font-medium text-gray-700">
+            <input type="checkbox" name="email_reminders_enabled" defaultChecked={emailRemindersEnabled} className="mt-1 size-4" />
+            Quero receber o resumo diário
+          </label>
+          <button className="min-h-10 bg-gray-950 px-4 text-sm font-bold text-white">Salvar preferência</button>
+        </form>
+      </section>
+
+      <AsaasSettingsPanel />
+
+      <SubscriptionPanel />
+
+      <section className="border-t border-gray-200 p-4">
+        <h3 className="font-bold text-gray-950">Autenticação em duas etapas</h3>
+        <p className="mt-1 text-sm text-gray-600">Configure um aplicativo autenticador (TOTP). O desafio será solicitado nas próximas sessões.</p>
+        <div className="mt-3"><MfaPanel /></div>
+      </section>
+
+      <section className="border-t border-gray-200 p-4">
+        <h3 className="font-bold text-gray-950">Restaurar backup</h3>
+        <p className="mt-1 text-sm text-amber-800">A restauração não sobrescreve registros: qualquer ID já existente cancela toda a operação. Faça isso de preferência em uma conta vazia.</p>
+        <BackupRestoreForm />
+      </section>
     </details>
   );
 }

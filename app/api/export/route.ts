@@ -23,6 +23,11 @@ export async function GET(request: Request) {
   const supabase = await createSupabaseServerClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return Response.json({ error: "Não autenticado." }, { status: 401 });
+  const { data: assurance, error: assuranceError } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+  if (assuranceError) return Response.json({ error: "Não foi possível verificar o segundo fator." }, { status: 503 });
+  if (assurance.nextLevel === "aal2" && assurance.currentLevel !== "aal2") {
+    return Response.json({ error: "Confirme o código do autenticador antes de exportar." }, { status: 403 });
+  }
 
   const backup = new URL(request.url).searchParams.get("formato") === "json";
   try {

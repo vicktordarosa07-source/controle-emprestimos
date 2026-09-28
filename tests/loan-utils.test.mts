@@ -1,0 +1,47 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import {
+  buildParcelas,
+  calcularJurosAtraso,
+  parseCustomIntervalDays,
+  parseDateOnly,
+  parseInstallmentCount,
+} from "../lib/loan-utils.ts";
+
+test("parcelas rateiam centavos sem perder o valor total", () => {
+  const parcelas = buildParcelas({
+    emprestimoId: "cobranca-1",
+    valorTotal: 100,
+    qtdParcelas: 3,
+    dataPrimeiroVencimento: "2026-01-31",
+    periodicidade: "mensal",
+    intervaloPersonalizadoDias: null,
+  });
+  assert.deepEqual(parcelas.map((parcela) => parcela.valor), [33.34, 33.33, 33.33]);
+  assert.equal(parcelas.reduce((sum, parcela) => sum + Math.round(parcela.valor * 100), 0), 10000);
+  assert.deepEqual(parcelas.map((parcela) => parcela.data_vencimento), ["2026-01-31", "2026-02-28", "2026-03-31"]);
+});
+
+test("intervalo customizado valida limites e aplica dias corridos", () => {
+  assert.equal(parseCustomIntervalDays("45", "personalizado"), 45);
+  assert.throws(() => parseCustomIntervalDays("0", "personalizado"));
+  const parcelas = buildParcelas({
+    emprestimoId: "cobranca-2", valorTotal: 10, qtdParcelas: 2,
+    dataPrimeiroVencimento: "2026-05-01", periodicidade: "personalizado",
+    intervaloPersonalizadoDias: 45,
+  });
+  assert.equal(parcelas[1].data_vencimento, "2026-06-15");
+});
+
+test("validadores rejeitam data impossível e parcela fora do intervalo", () => {
+  assert.throws(() => parseDateOnly("2026-02-30", "Vencimento"));
+  assert.throws(() => parseInstallmentCount("121"));
+  assert.equal(parseInstallmentCount("120"), 120);
+});
+
+test("juros diário não cobra antes do vencimento e arredonda moeda", () => {
+  const base = { saldoPrincipal: 100, dataVencimento: "2026-01-01", hoje: new Date("2026-01-04T12:00:00"), valorDiario: 0.5 };
+  assert.equal(calcularJurosAtraso({ ...base, tipo: "valor" }), 1.5);
+  assert.equal(calcularJurosAtraso({ ...base, tipo: "percentual" }), 1.5);
+  assert.equal(calcularJurosAtraso({ ...base, dataVencimento: "2026-01-04", tipo: "valor" }), 0);
+});

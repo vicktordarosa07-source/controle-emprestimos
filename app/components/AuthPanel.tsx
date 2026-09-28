@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 
 const AUTH_CONFIRM_REDIRECT_URL =
-  "https://controle-emprestimos-project.vercel.app/auth/confirm";
+  `${process.env.NEXT_PUBLIC_SITE_URL ?? "https://gestao-de-emprestimo.vercel.app"}/auth/confirm`;
 
 export function AuthPanel() {
   const router = useRouter();
