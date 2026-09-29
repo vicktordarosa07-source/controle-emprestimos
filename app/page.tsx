@@ -336,13 +336,29 @@ function SummaryCard({
   }[tone];
 
   return (
-    <div className="border border-gray-200 bg-white p-4 shadow-sm">
+    <div className="summary-card border border-gray-200 bg-white p-4 shadow-sm">
       <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
         {label}
       </p>
       <p className={`mt-2 text-2xl font-bold ${toneClass}`}>{value}</p>
     </div>
   );
+}
+
+function NavIcon({ view }: { view: ViewFilter }) {
+  const paths: Record<ViewFilter, React.ReactNode> = {
+    abertas: <><path d="M7 3.75h7l4.25 4.3v11.2a1 1 0 0 1-1 1h-10.5a1 1 0 0 1-1-1V4.75a1 1 0 0 1 1-1Z" /><path d="M14 3.9v4.4h4.2M8.5 12h6M8.5 15.5h6" /></>,
+    atrasadas: <><circle cx="12" cy="12" r="8.5" /><path d="M12 7v5l3 2" /></>,
+    pagas: <><path d="M5 4.5h14v15H5z" /><path d="m8.5 12 2.2 2.2 4.8-5" /></>,
+    todas: <><path d="M5 5.5h14M5 12h14M5 18.5h14" /><circle cx="8" cy="5.5" r="1" /><circle cx="13" cy="12" r="1" /><circle cx="10" cy="18.5" r="1" /></>,
+    lembretes: <><path d="M18 9a6 6 0 0 0-12 0c0 7-2.5 7-2.5 8.5h17C20.5 16 18 16 18 9ZM10 21h4" /></>,
+    financeiro: <><path d="M5 19V10M10 19V5M15 19v-7M20 19V8" /><path d="M3 19.5h18" /></>,
+    historico: <><circle cx="12" cy="12" r="8.5" /><path d="M12 7v5l3.5 2" /></>,
+    lixeira: <><path d="M4 7h16M9 7V4.5h6V7m3 0-.8 13h-10L6.4 7M10 10v6m4-6v6" /></>,
+    configuracoes: <><circle cx="12" cy="12" r="3.2" /><path d="M19.4 13.5a7.7 7.7 0 0 0 0-3l1.4-1.1-1.5-2.6-1.7.6a7.8 7.8 0 0 0-2.6-1.5L14.7 4h-3.1l-.3 1.9a7.8 7.8 0 0 0-2.6 1.5L7 6.8 5.5 9.4 7 10.5a7.7 7.7 0 0 0 0 3l-1.5 1.1L7 17.2l1.7-.6a7.8 7.8 0 0 0 2.6 1.5l.3 1.9h3.1l.3-1.9a7.8 7.8 0 0 0 2.6-1.5l1.7.6 1.5-2.6-1.4-1.1Z" /></>,
+  };
+
+  return <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="size-[18px] shrink-0">{paths[view]}</svg>;
 }
 
 function FilterLink({
@@ -376,8 +392,8 @@ function AccessPending({ email, status }: { email: string; status: string }) {
   const blocked = status === "blocked";
 
   return (
-    <main className="grid min-h-screen place-items-center bg-gray-50 px-4">
-      <section className="w-full max-w-md border border-gray-200 bg-white p-6 text-center shadow-sm">
+    <main className="auth-shell">
+      <section className="w-full max-w-md rounded-2xl border border-gray-200 bg-white p-8 text-center shadow-soft">
         <h1 className="text-2xl font-bold text-gray-950">
           {blocked ? "Acesso bloqueado" : "Aguardando aprovação"}
         </h1>
@@ -892,8 +908,8 @@ export default async function Home({ searchParams }: PageProps) {
     if (assuranceError) throw new Error(`Erro ao verificar autenticação: ${assuranceError.message}`);
     if (assurance.nextLevel === "aal2" && assurance.currentLevel !== "aal2") {
       return (
-        <main className="grid min-h-screen place-items-center bg-gray-50 px-4">
-          <section className="w-full max-w-md space-y-4 border border-gray-200 bg-white p-6 shadow-sm">
+        <main className="auth-shell">
+          <section className="w-full max-w-md space-y-4 rounded-2xl border border-gray-200 bg-white p-7 shadow-soft">
             <h1 className="text-xl font-bold text-gray-950">Verificação em duas etapas</h1>
             <MfaPanel challengeOnly />
             <SignOutButton />
@@ -1030,8 +1046,8 @@ export default async function Home({ searchParams }: PageProps) {
   ];
 
   return (
-    <main className="min-h-screen bg-gray-50">
-      <header className="sticky top-0 z-40 border-b border-gray-200 bg-white">
+    <main className="app-shell">
+      <header className="app-header sticky top-0 z-40 border-b border-gray-200 bg-white">
         <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-xl font-bold text-gray-950 sm:text-2xl">
@@ -1041,15 +1057,15 @@ export default async function Home({ searchParams }: PageProps) {
               {activeView === "configuracoes" ? userEmail : `${userEmail} • ${abertas.length} em aberto • ${atrasadas.length} atrasada(s)`}
             </p>
           </div>
-          <div className="flex flex-col gap-2 sm:flex-row">
+          <div className="header-actions flex items-center gap-2">
             <NovoEmprestimoModal />
             <SignOutButton />
           </div>
         </div>
       </header>
 
-      <div className="mx-auto flex max-w-7xl items-start gap-6 px-4 py-6">
-        <aside className="sticky top-24 hidden w-60 shrink-0 md:block" aria-label="Menu lateral">
+      <div className="app-layout mx-auto flex max-w-7xl items-start gap-6 px-4 py-6">
+        <aside className="app-sidebar sticky top-24 hidden w-60 shrink-0 md:block" aria-label="Menu lateral">
           <nav aria-label="Áreas do sistema" className="border border-gray-200 bg-white p-3 shadow-sm">
             <p className="mb-3 px-3 text-xs font-bold uppercase tracking-wide text-gray-500">Menu</p>
             <div className="space-y-1">
@@ -1057,7 +1073,7 @@ export default async function Home({ searchParams }: PageProps) {
                 <a key={view} href={buildHref({ view, q, mes: view === "financeiro" ? mesSelecionado : undefined })}
                   aria-current={activeView === view ? "page" : undefined}
                   className={`flex min-h-11 items-center justify-between border-l-4 px-3 py-2 text-sm font-semibold transition-colors ${activeView === view ? "border-blue-700 bg-blue-50 text-blue-800" : "border-transparent text-gray-700 hover:bg-gray-50 hover:text-gray-950"}`}>
-                  <span>{label}</span>
+                  <span className="flex min-w-0 items-center gap-3"><NavIcon view={view} /><span className="truncate">{label}</span></span>
                   {count !== undefined ? <span className={`ml-2 rounded-full px-2 py-0.5 text-xs ${activeView === view ? "bg-blue-100 text-blue-800" : "bg-gray-100 text-gray-600"}`}>{count}</span> : null}
                 </a>
               ))}
@@ -1071,13 +1087,13 @@ export default async function Home({ searchParams }: PageProps) {
           </nav>
         </aside>
 
-        <div className="min-w-0 flex-1 space-y-6">
-          <nav aria-label="Áreas do sistema" className="flex gap-2 overflow-x-auto border border-gray-200 bg-white p-2 md:hidden">
+        <div className="app-content min-w-0 flex-1 space-y-6">
+          <nav aria-label="Áreas do sistema" className="app-mobile-nav flex gap-2 overflow-x-auto border border-gray-200 bg-white p-2 md:hidden">
             {primaryNavigation.map(({ view, label, count }) => (
               <a key={view} href={buildHref({ view, q, mes: view === "financeiro" ? mesSelecionado : undefined })}
                 aria-current={activeView === view ? "page" : undefined}
                 className={`min-h-10 shrink-0 px-3 py-2 text-sm font-bold ${activeView === view ? "bg-blue-700 text-white" : "border border-gray-300 text-gray-700 hover:bg-gray-50"}`}>
-                {label}{count !== undefined ? ` (${count})` : ""}
+                <span className="flex items-center gap-2"><NavIcon view={view} />{label}{count !== undefined ? ` (${count})` : ""}</span>
               </a>
             ))}
           </nav>
@@ -1096,7 +1112,7 @@ export default async function Home({ searchParams }: PageProps) {
           </div>
         ) : null}
 
-        {activeView !== "configuracoes" ? <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {activeView !== "configuracoes" ? <section className="summary-grid grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <SummaryCard
             label="Total a receber"
             value={formatCurrency(sumSaldoRestante(abertas, hoje))}
@@ -1121,10 +1137,10 @@ export default async function Home({ searchParams }: PageProps) {
 
         {activeView === "configuracoes" ? (
           <section className="space-y-5" aria-labelledby="settings-title">
-            <header className="border border-gray-200 bg-white p-5 shadow-sm">
+            <header className="content-panel border border-gray-200 bg-white p-6 shadow-sm">
               <h2 id="settings-title" className="text-xl font-bold text-gray-950">Configurações</h2>
               <p className="mt-1 text-sm text-gray-600">Gerencie seus dados, recebimentos, plano, segurança e backups em um só lugar.</p>
-              <nav aria-label="Seções de configurações" className="mt-4 flex flex-wrap gap-2">
+              <nav aria-label="Seções de configurações" className="settings-anchor-nav mt-4 flex flex-wrap gap-2">
                 {[
                   ["#dados-da-conta", "Conta"],
                   ["#assinatura", "Plano"],
@@ -1145,7 +1161,7 @@ export default async function Home({ searchParams }: PageProps) {
               <div><h2 className="text-lg font-bold text-gray-950">Resumo financeiro</h2><p className="text-sm text-gray-600">Entradas usam a data real do pagamento. O histórico mensal detalhado começa após a migração.</p></div>
               <form action="/" className="flex items-end gap-2"><input type="hidden" name="view" value="financeiro" /><label className="text-xs font-bold text-gray-600">Período<input name="mes" type="month" defaultValue={mesSelecionado} className="mt-1 block min-h-10 border border-gray-300 px-3 text-sm" /></label><button className="min-h-10 bg-blue-700 px-4 text-sm font-bold text-white">Aplicar</button></form>
             </div>
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="summary-grid grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
               <SummaryCard label="Recebido no mês" value={formatCurrency(recebidoMes)} tone="green" />
               <SummaryCard label="Recebido no mês anterior" value={formatCurrency(recebidoMesAnterior)} tone="gray" />
               <SummaryCard label="Em aberto com vencimento no mês" value={formatCurrency(sumSaldoRestante(cobrancasDoMes.filter((p) => p.status !== "Pago"), hoje))} tone="blue" />

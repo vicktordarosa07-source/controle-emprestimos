@@ -29,16 +29,16 @@ export function NovoEmprestimoModal() {
 
   return (
     <>
-      <button onClick={() => { setError(null); setPeriodicidade("mensal"); setOpen(true); }} className="w-full bg-blue-700 px-5 py-3 font-semibold text-white shadow-sm transition hover:bg-blue-800 sm:w-auto">
+      <button onClick={() => { setError(null); setPeriodicidade("mensal"); setOpen(true); }} className="w-full rounded-xl bg-blue-700 px-5 py-3 font-semibold text-white shadow-sm transition hover:bg-blue-800 sm:w-auto">
         + Nova cobrança
       </button>
       {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="max-h-[90vh] w-full max-w-md overflow-auto bg-white shadow-xl">
+        <div className="modal-backdrop fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div role="dialog" aria-modal="true" aria-labelledby="new-charge-title" className="charge-modal max-h-[90vh] w-full max-w-lg overflow-auto bg-white">
             <div className="p-6">
               <div className="mb-4 flex items-center justify-between">
-                <div><p className="text-xs font-bold uppercase tracking-wide text-blue-700">Nova cobrança</p><h2 className="mt-1 text-lg font-bold">Cadastre uma cobrança</h2></div>
-                <button onClick={() => setOpen(false)} className="text-xl leading-none text-gray-500 hover:text-gray-700" aria-label="Fechar">×</button>
+                  <div><p className="text-xs font-bold uppercase tracking-wide text-blue-700">Nova cobrança</p><h2 id="new-charge-title" className="mt-1 text-xl font-bold">Cadastre uma cobrança</h2></div>
+                <button type="button" onClick={() => setOpen(false)} className="rounded-lg px-2 py-1 text-xl leading-none text-gray-500 hover:bg-gray-100 hover:text-gray-900" aria-label="Fechar">×</button>
               </div>
               <form ref={formRef} action={handleSubmit} className="space-y-4">
                 {error && <div role="alert" className="border border-red-200 bg-red-50 p-3 text-sm font-medium text-red-700">{error}</div>}

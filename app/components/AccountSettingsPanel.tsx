@@ -35,7 +35,7 @@ export function AccountSettingsPanel({ email, fone, emailRemindersEnabled }: Pro
 
   return (
     <div className="space-y-4">
-      <section id="dados-da-conta" className="scroll-mt-24 border border-gray-200 bg-white shadow-sm">
+      <section id="dados-da-conta" className="settings-section scroll-mt-24 border border-gray-200 bg-white shadow-sm">
       <div className="border-b border-gray-200 p-4">
         <h3 className="font-bold text-gray-950">Dados da conta</h3>
         <p className="mt-1 text-sm text-gray-600">Atualize suas informações de acesso e contato.</p>
@@ -123,7 +123,7 @@ export function AccountSettingsPanel({ email, fone, emailRemindersEnabled }: Pro
       </form>
       </section>
 
-      <section id="lembretes-email" className="scroll-mt-24 border border-gray-200 bg-white p-4 shadow-sm">
+      <section id="lembretes-email" className="settings-section scroll-mt-24 border border-gray-200 bg-white p-5 shadow-sm">
         <h3 className="font-bold text-gray-950">Resumo diário por e-mail</h3>
         <p className="mt-1 text-sm text-gray-600">Enviado para {email}; inclui cobranças vencidas e próximas. O envio só funciona após configurar Resend e o cron da Vercel.</p>
         <form action={atualizarPreferenciasEmail} className="mt-3 flex items-center justify-between gap-4">
@@ -135,15 +135,15 @@ export function AccountSettingsPanel({ email, fone, emailRemindersEnabled }: Pro
         </form>
       </section>
 
-      <div id="assinatura" className="scroll-mt-24 border border-gray-200 bg-white shadow-sm"><SubscriptionPanel /></div>
+      <div id="assinatura" className="settings-section scroll-mt-24 border border-gray-200 bg-white shadow-sm"><SubscriptionPanel /></div>
 
-      <section id="seguranca" className="scroll-mt-24 border border-gray-200 bg-white p-4 shadow-sm">
+      <section id="seguranca" className="settings-section scroll-mt-24 border border-gray-200 bg-white p-5 shadow-sm">
         <h3 className="font-bold text-gray-950">Autenticação em duas etapas</h3>
         <p className="mt-1 text-sm text-gray-600">Configure um aplicativo autenticador (TOTP). O desafio será solicitado nas próximas sessões.</p>
         <div className="mt-3"><MfaPanel /></div>
       </section>
 
-      <section id="backup" className="scroll-mt-24 border border-gray-200 bg-white p-4 shadow-sm">
+      <section id="backup" className="settings-section scroll-mt-24 border border-gray-200 bg-white p-5 shadow-sm">
         <h3 className="font-bold text-gray-950">Restaurar backup</h3>
         <p className="mt-1 text-sm text-amber-800">A restauração não sobrescreve registros: qualquer ID já existente cancela toda a operação. Faça isso de preferência em uma conta vazia.</p>
         <BackupRestoreForm />

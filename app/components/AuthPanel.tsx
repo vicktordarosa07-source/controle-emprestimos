@@ -28,12 +28,12 @@ export function AuthPanel() {
     setMessage(null);
 
     if (mode === "signup" && (onlyPhoneDigits.length < 10 || onlyPhoneDigits.length > 15)) {
-      setError("Informe um fone valido com DDD.");
+      setError("Informe um telefone válido com DDD.");
       return;
     }
 
     if (mode === "signup" && password !== confirmPassword) {
-      setError("As senhas digitadas nao conferem.");
+      setError("As senhas digitadas não conferem.");
       return;
     }
 
@@ -73,27 +73,35 @@ export function AuthPanel() {
   }
 
   return (
-    <main className="grid min-h-screen place-items-center bg-gray-50 px-4">
-      <section className="w-full max-w-md border border-gray-200 bg-white p-6 shadow-sm">
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold text-gray-950">
-            Recebify
-          </h1>
-          <p className="mt-2 text-sm font-medium text-gray-600">
+    <main className="auth-shell">
+      <section className="auth-layout">
+        <div className="auth-intro">
+          <div className="auth-brand">
+            <span aria-hidden="true" className="auth-brand-mark">R</span>
+            <span className="auth-brand-name">Recebify</span>
+          </div>
+          <div className="auth-copy">
+            <h1>{mode === "login" ? "Acesse sua conta" : "Crie seu acesso"}</h1>
+            <p>
             {mode === "login"
               ? "Entre para gerenciar clientes, cobranças e pagamentos."
               : "Crie seu acesso para organizar cobranças e vencimentos."}
-          </p>
+            </p>
+          </div>
+          <div className="auth-aside-line" aria-hidden="true" />
         </div>
 
-        <div className="mb-5 grid grid-cols-2 border border-gray-300 p-1">
+        <div className="auth-form-side">
+          <div className="auth-form-card">
+        <div className="auth-tabs mb-6">
           <button
             type="button"
             onClick={() => changeMode("login")}
+            aria-pressed={mode === "login"}
             className={
               mode === "login"
-                ? "min-h-10 bg-gray-950 px-3 text-sm font-bold text-white"
-                : "min-h-10 px-3 text-sm font-bold text-gray-700 hover:bg-gray-50"
+                ? "min-h-10 px-3 text-sm font-bold text-gray-900"
+                : "min-h-10 px-3 text-sm font-bold text-gray-600 hover:bg-white/70"
             }
           >
             Entrar
@@ -101,10 +109,11 @@ export function AuthPanel() {
           <button
             type="button"
             onClick={() => changeMode("signup")}
+            aria-pressed={mode === "signup"}
             className={
               mode === "signup"
-                ? "min-h-10 bg-gray-950 px-3 text-sm font-bold text-white"
-                : "min-h-10 px-3 text-sm font-bold text-gray-700 hover:bg-gray-50"
+                ? "min-h-10 px-3 text-sm font-bold text-gray-900"
+                : "min-h-10 px-3 text-sm font-bold text-gray-600 hover:bg-white/70"
             }
           >
             Cadastrar
@@ -113,12 +122,12 @@ export function AuthPanel() {
 
         <form className="space-y-4" onSubmit={handleSubmit}>
           {error ? (
-            <div className="border border-red-200 bg-red-50 p-3 text-sm font-medium text-red-700">
+            <div role="alert" className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-medium text-red-700">
               {error}
             </div>
           ) : null}
           {message ? (
-            <div className="border border-emerald-200 bg-emerald-50 p-3 text-sm font-medium text-emerald-700">
+            <div role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm font-medium text-emerald-700">
               {message}
             </div>
           ) : null}
@@ -140,7 +149,7 @@ export function AuthPanel() {
           {mode === "signup" ? (
             <div>
               <label className="mb-1 block text-sm font-semibold" htmlFor="fone">
-                Fone
+                Telefone
               </label>
               <input
                 id="fone"
@@ -190,7 +199,7 @@ export function AuthPanel() {
 
           <button
             disabled={isPending}
-            className="min-h-11 w-full bg-blue-700 px-4 text-sm font-bold text-white hover:bg-blue-800 disabled:opacity-50"
+            className="min-h-12 w-full rounded-xl bg-blue-700 px-4 text-sm font-bold text-white shadow-sm hover:bg-blue-800 disabled:opacity-50"
           >
             {isPending
               ? mode === "signup"
@@ -201,6 +210,8 @@ export function AuthPanel() {
                 : "Entrar"}
           </button>
         </form>
+          </div>
+        </div>
       </section>
     </main>
   );
