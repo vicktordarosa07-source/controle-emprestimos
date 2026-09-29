@@ -35,17 +35,13 @@ export function AccountSettingsPanel({ email, fone, emailRemindersEnabled }: Pro
   }
 
   return (
-    <details className="border border-gray-200 bg-white shadow-sm">
-      <summary className="cursor-pointer list-none p-4 marker:hidden">
-        <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-          <h2 className="text-lg font-bold text-gray-950">Configuração de conta</h2>
-          <span className="text-sm font-semibold text-gray-500">
-          Conta, segurança e lembretes
-          </span>
-        </div>
-      </summary>
-
-      <form ref={formRef} action={handleAction} className="space-y-4 border-t border-gray-200 p-4">
+    <div className="space-y-4">
+      <section id="dados-da-conta" className="scroll-mt-24 border border-gray-200 bg-white shadow-sm">
+      <div className="border-b border-gray-200 p-4">
+        <h3 className="font-bold text-gray-950">Dados da conta</h3>
+        <p className="mt-1 text-sm text-gray-600">Atualize suas informações de acesso e contato.</p>
+      </div>
+      <form ref={formRef} action={handleAction} className="space-y-4 p-4">
         {error ? (
           <div className="border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700">
             {error}
@@ -126,8 +122,9 @@ export function AccountSettingsPanel({ email, fone, emailRemindersEnabled }: Pro
           </button>
         </div>
       </form>
+      </section>
 
-      <section className="border-t border-gray-200 p-4">
+      <section id="lembretes-email" className="scroll-mt-24 border border-gray-200 bg-white p-4 shadow-sm">
         <h3 className="font-bold text-gray-950">Resumo diário por e-mail</h3>
         <p className="mt-1 text-sm text-gray-600">Enviado para {email}; inclui cobranças vencidas e próximas. O envio só funciona após configurar Resend e o cron da Vercel.</p>
         <form action={atualizarPreferenciasEmail} className="mt-3 flex items-center justify-between gap-4">
@@ -139,21 +136,21 @@ export function AccountSettingsPanel({ email, fone, emailRemindersEnabled }: Pro
         </form>
       </section>
 
-      <AsaasSettingsPanel />
+      <div id="asaas" className="scroll-mt-24 border border-gray-200 bg-white shadow-sm"><AsaasSettingsPanel /></div>
 
-      <SubscriptionPanel />
+      <div id="assinatura" className="scroll-mt-24 border border-gray-200 bg-white shadow-sm"><SubscriptionPanel /></div>
 
-      <section className="border-t border-gray-200 p-4">
+      <section id="seguranca" className="scroll-mt-24 border border-gray-200 bg-white p-4 shadow-sm">
         <h3 className="font-bold text-gray-950">Autenticação em duas etapas</h3>
         <p className="mt-1 text-sm text-gray-600">Configure um aplicativo autenticador (TOTP). O desafio será solicitado nas próximas sessões.</p>
         <div className="mt-3"><MfaPanel /></div>
       </section>
 
-      <section className="border-t border-gray-200 p-4">
+      <section id="backup" className="scroll-mt-24 border border-gray-200 bg-white p-4 shadow-sm">
         <h3 className="font-bold text-gray-950">Restaurar backup</h3>
         <p className="mt-1 text-sm text-amber-800">A restauração não sobrescreve registros: qualquer ID já existente cancela toda a operação. Faça isso de preferência em uma conta vazia.</p>
         <BackupRestoreForm />
       </section>
-    </details>
+    </div>
   );
 }

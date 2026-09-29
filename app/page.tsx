@@ -16,7 +16,7 @@ import { aprovarUsuario, atualizarCliente } from "./actions";
 export const dynamic = "force-dynamic";
 
 type ParcelaStatus = "Pendente" | "Pago" | string;
-type ViewFilter = "abertas" | "atrasadas" | "pagas" | "todas" | "lembretes" | "financeiro" | "historico" | "lixeira";
+type ViewFilter = "abertas" | "atrasadas" | "pagas" | "todas" | "lembretes" | "financeiro" | "historico" | "lixeira" | "configuracoes";
 
 type ParcelaComCliente = {
   id: string;
@@ -108,6 +108,7 @@ const viewLabels: Record<ViewFilter, string> = {
   financeiro: "Financeiro",
   historico: "Histórico de pagamentos",
   lixeira: "Lixeira",
+  configuracoes: "Configurações",
 };
 
 function formatCurrency(value: number) {
@@ -293,7 +294,7 @@ function agruparPorCliente({
 }
 
 function normalizeView(value: string | undefined): ViewFilter {
-  if (value === "atrasadas" || value === "pagas" || value === "todas" || value === "lembretes" || value === "financeiro" || value === "historico" || value === "lixeira") {
+  if (value === "atrasadas" || value === "pagas" || value === "todas" || value === "lembretes" || value === "financeiro" || value === "historico" || value === "lixeira" || value === "configuracoes") {
     return value;
   }
 
@@ -970,7 +971,7 @@ export default async function Home({ searchParams }: PageProps) {
     userFone = profile.fone ?? "";
     emailRemindersEnabled = Boolean(profile.email_reminders_enabled);
 
-    if (isAdmin) {
+    if (isAdmin && activeView === "configuracoes") {
       const { data: profiles, error: pendingError } = await supabase
         .from("profiles")
         .select("id, email, fone, status, is_admin, created_at")
@@ -984,6 +985,7 @@ export default async function Home({ searchParams }: PageProps) {
       pendingUsers = (profiles as UserProfile[] | null) ?? [];
     }
 
+    if (activeView !== "configuracoes") {
     const { data, error } = await supabase
       .from("parcelas")
       .select(
@@ -1035,6 +1037,7 @@ export default async function Home({ searchParams }: PageProps) {
     pagamentos = (pagamentosResult.data ?? []) as unknown as PagamentoResumo[];
     contatos = (contatosResult.data ?? []) as unknown as ContatoResumo[];
     arquivadas = (arquivadasResult.data ?? []) as unknown as CobrancaArquivada[];
+    }
   } catch (error) {
     fetchError = (error as Error).message;
   }
@@ -1092,7 +1095,7 @@ export default async function Home({ searchParams }: PageProps) {
               Recebify • Gestão de cobranças
             </h1>
             <p className="text-sm font-medium text-gray-500">
-              {userEmail} • {abertas.length} em aberto • {atrasadas.length} atrasada(s)
+              {activeView === "configuracoes" ? userEmail : `${userEmail} • ${abertas.length} em aberto • ${atrasadas.length} atrasada(s)`}
             </p>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row">
@@ -1109,10 +1112,7 @@ export default async function Home({ searchParams }: PageProps) {
           </div>
         ) : null}
 
-        <AccountSettingsPanel email={userEmail} fone={userFone} emailRemindersEnabled={emailRemindersEnabled} />
-        {isAdmin ? <AdminApprovalPanel pendingUsers={pendingUsers} /> : null}
-
-        <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {activeView !== "configuracoes" ? <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <SummaryCard
             label="Total a receber"
             value={formatCurrency(sumSaldoRestante(abertas, hoje))}
@@ -1133,10 +1133,10 @@ export default async function Home({ searchParams }: PageProps) {
             value={formatCurrency(sumValorPago(filtradasPorBusca))}
             tone="gray"
           />
-        </section>
+        </section> : null}
 
         <nav aria-label="Áreas do sistema" className="flex flex-wrap gap-2 border border-gray-200 bg-white p-3">
-          {(["abertas", "lembretes", "financeiro", "historico", "lixeira"] as ViewFilter[]).map((view) => (
+          {(["abertas", "lembretes", "financeiro", "historico", "lixeira", "configuracoes"] as ViewFilter[]).map((view) => (
             <a key={view} href={buildHref({ view, q, mes: view === "financeiro" ? mesSelecionado : undefined })}
               aria-current={activeView === view ? "page" : undefined}
               className={`min-h-10 px-4 py-2 text-sm font-bold ${activeView === view ? "bg-blue-700 text-white" : "border border-gray-300 text-gray-700 hover:bg-gray-50"}`}>
@@ -1144,10 +1144,35 @@ export default async function Home({ searchParams }: PageProps) {
               {view === "lembretes" ? ` (${lembretes.length})` : view === "lixeira" ? ` (${arquivadas.length})` : ""}
             </a>
           ))}
-          <a href="/api/export" className="min-h-10 border border-gray-300 px-4 py-2 text-sm font-bold text-gray-700 hover:bg-gray-50">Exportar cobranças CSV</a>
-          <a href="/api/export?tipo=pagamentos" className="min-h-10 border border-gray-300 px-4 py-2 text-sm font-bold text-gray-700 hover:bg-gray-50">Exportar pagamentos CSV</a>
-          <a href="/api/export?formato=json" className="min-h-10 border border-gray-300 px-4 py-2 text-sm font-bold text-gray-700 hover:bg-gray-50">Baixar backup JSON</a>
+          {activeView !== "configuracoes" ? <>
+            <a href="/api/export" className="min-h-10 border border-gray-300 px-4 py-2 text-sm font-bold text-gray-700 hover:bg-gray-50">Exportar cobranças CSV</a>
+            <a href="/api/export?tipo=pagamentos" className="min-h-10 border border-gray-300 px-4 py-2 text-sm font-bold text-gray-700 hover:bg-gray-50">Exportar pagamentos CSV</a>
+            <a href="/api/export?formato=json" className="min-h-10 border border-gray-300 px-4 py-2 text-sm font-bold text-gray-700 hover:bg-gray-50">Baixar backup JSON</a>
+          </> : null}
         </nav>
+
+        {activeView === "configuracoes" ? (
+          <section className="space-y-5" aria-labelledby="settings-title">
+            <header className="border border-gray-200 bg-white p-5 shadow-sm">
+              <h2 id="settings-title" className="text-xl font-bold text-gray-950">Configurações</h2>
+              <p className="mt-1 text-sm text-gray-600">Gerencie seus dados, recebimentos, plano, segurança e backups em um só lugar.</p>
+              <nav aria-label="Seções de configurações" className="mt-4 flex flex-wrap gap-2">
+                {[
+                  ["#dados-da-conta", "Conta"],
+                  ["#asaas", "Recebimentos"],
+                  ["#assinatura", "Plano"],
+                  ["#seguranca", "Segurança"],
+                  ["#backup", "Backup"],
+                  ...(isAdmin ? [["#acessos", "Acessos"]] : []),
+                ].map(([href, label]) => (
+                  <a key={href} href={href} className="min-h-9 border border-gray-300 px-3 py-2 text-sm font-semibold text-gray-700 hover:border-blue-700 hover:text-blue-700">{label}</a>
+                ))}
+              </nav>
+            </header>
+            <AccountSettingsPanel email={userEmail} fone={userFone} emailRemindersEnabled={emailRemindersEnabled} />
+            {isAdmin ? <div id="acessos" className="scroll-mt-24"><AdminApprovalPanel pendingUsers={pendingUsers} /></div> : null}
+          </section>
+        ) : null}
 
         {activeView === "financeiro" ? (
           <section className="space-y-4">
