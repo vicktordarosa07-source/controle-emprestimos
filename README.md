@@ -32,7 +32,7 @@ Pagamentos anteriores à migração continuam nos saldos existentes, mas não é
 
 Para uma instalação nova, primeiro configure o esquema-base descrito em `supabase-production.sql` (incluindo o backfill de `OWNER_USER_ID`, quando aplicável) e depois execute, em ordem, `supabase-cobrancas.sql`, `supabase-cadastro-aberto.sql`, `supabase-recursos-operacionais.sql` e `supabase-saas-fundacao.sql`. Não execute o esquema-base sobre uma instalação existente sem revisar o arquivo: ele contém passos de configuração inicial que não são uma migração geral idempotente.
 
-Ative Email/Password e a opção de cadastro de novos usuários em Authentication > Providers. Configure os redirects de autenticação para o domínio da aplicação. O cadastro é público; cada conta nova recebe acesso normal e fica isolada dos dados das outras contas. Usuários anteriormente pendentes são liberados pela migração de cadastro aberto; contas bloqueadas continuam bloqueadas. Se a confirmação de e-mail estiver ativada no Supabase, a pessoa precisará confirmar o endereço antes do primeiro login.
+Ative Email/Password e a opção de cadastro de novos usuários em Authentication > Providers. Em Authentication > URL Configuration, use `https://recebify.vercel.app` como Site URL e permita o redirect exato `https://recebify.vercel.app/auth/confirm`. O cadastro é público; cada conta nova recebe acesso normal e fica isolada dos dados das outras contas. Usuários anteriormente pendentes são liberados pela migração de cadastro aberto; contas bloqueadas continuam bloqueadas. Se a confirmação de e-mail estiver ativada no Supabase, a pessoa precisará confirmar o endereço antes do primeiro login.
 
 ## Asaas, e-mail, cron e segurança
 
