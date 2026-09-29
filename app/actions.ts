@@ -7,6 +7,7 @@ import {
   calcularJurosAtraso,
   parseCustomIntervalDays,
   parseCpf,
+  parseCpfCnpj,
   parseDateOnly,
   parseDueFrequency,
   parseEmail,
@@ -437,9 +438,11 @@ export async function obterAssinaturaSaaS() {
 }
 
 export async function assinarPlanoFluxo(formData: FormData, confirmarProducao = false) {
+  try {
   const { user } = await requireUser();
   const planKey = String(formData.get("plan_key") ?? "");
   if (planKey !== "starter") throw new Error("Plano inválido.");
+  const cpfCnpj = parseCpfCnpj(formData.get("cpfCnpj"));
   const priceRaw = PLAN_CONFIG[planKey].monthlyPrice;
   const price = Number(priceRaw);
   if (!priceRaw || !Number.isFinite(price) || price <= 0) throw new Error("O preço deste plano ainda não foi configurado pelo administrador do SaaS.");
@@ -466,17 +469,23 @@ export async function assinarPlanoFluxo(formData: FormData, confirmarProducao = 
   customerLookup.searchParams.set("limit", "1");
   const lookupResponse = await fetch(customerLookup, { headers, cache: "no-store" });
   if (!lookupResponse.ok) throw new Error("Não foi possível consultar clientes da conta Asaas da plataforma.");
-  const lookup = await lookupResponse.json() as { data?: { id: string }[] };
+  const lookup = await lookupResponse.json() as { data?: { id: string; cpfCnpj?: string | null }[] };
   let customerId = lookup.data?.[0]?.id;
   if (!customerId) {
     const customerResponse = await fetch(`${base}/customers`, {
       method: "POST", headers,
-      body: JSON.stringify({ name: profile.data.email, email: profile.data.email, mobilePhone: profile.data.fone || undefined, externalReference: user.id }),
+      body: JSON.stringify({ name: profile.data.email, cpfCnpj, email: profile.data.email, mobilePhone: profile.data.fone || undefined, externalReference: user.id }),
       cache: "no-store",
     });
     const customer = await customerResponse.json() as { id?: string; errors?: { description?: string }[] };
     if (!customerResponse.ok || !customer.id) throw new Error(customer.errors?.[0]?.description ?? "Falha ao criar cliente da assinatura.");
     customerId = customer.id;
+  } else if (lookup.data?.[0]?.cpfCnpj !== cpfCnpj) {
+    const customerResponse = await fetch(`${base}/customers/${encodeURIComponent(customerId)}`, {
+      method: "PUT", headers, body: JSON.stringify({ cpfCnpj }), cache: "no-store",
+    });
+    const customer = await customerResponse.json() as { errors?: { description?: string }[] };
+    if (!customerResponse.ok) throw new Error(customer.errors?.[0]?.description ?? "Não foi possível atualizar o CPF/CNPJ no Asaas.");
   }
 
   const due = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
@@ -513,7 +522,11 @@ export async function assinarPlanoFluxo(formData: FormData, confirmarProducao = 
   });
   if (error) throw new Error("Assinatura criada no Asaas, mas não foi possível salvar no Recebify. Contate o suporte antes de repetir.");
   revalidatePath("/");
-  return { plan: PLAN_CONFIG[planKey].name, nextDueDate, environment };
+  return { ok: true as const, plan: PLAN_CONFIG[planKey].name, nextDueDate, environment };
+  } catch (reason) {
+    const message = reason instanceof Error ? reason.message : "Não foi possível iniciar a assinatura. Tente novamente.";
+    return { ok: false as const, error: message };
+  }
 }
 
 export async function cancelarAssinaturaFluxo() {

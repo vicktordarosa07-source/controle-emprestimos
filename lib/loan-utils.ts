@@ -59,6 +59,17 @@ export function parseCpf(value: FormDataEntryValue | null) {
   return digits;
 }
 
+export function parseCpfCnpj(value: FormDataEntryValue | null) {
+  const raw = typeof value === "string" ? value.trim().toLocaleUpperCase("pt-BR") : "";
+  const document = raw.replace(/[.\-/\s]/g, "");
+
+  if (!/^\d{11}$/.test(document) && !/^[A-Z0-9]{12}\d{2}$/.test(document)) {
+    throw new Error("Informe um CPF com 11 dígitos ou um CNPJ válido.");
+  }
+
+  return document;
+}
+
 export function parsePhone(value: FormDataEntryValue | null) {
   const raw = typeof value === "string" ? value.trim() : "";
 

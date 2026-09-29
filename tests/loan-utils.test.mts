@@ -4,6 +4,7 @@ import {
   buildParcelas,
   calcularJurosAtraso,
   parseCustomIntervalDays,
+  parseCpfCnpj,
   parseDateOnly,
   parseInstallmentCount,
 } from "../lib/loan-utils.ts";
@@ -37,6 +38,12 @@ test("validadores rejeitam data impossível e parcela fora do intervalo", () => 
   assert.throws(() => parseDateOnly("2026-02-30", "Vencimento"));
   assert.throws(() => parseInstallmentCount("121"));
   assert.equal(parseInstallmentCount("120"), 120);
+});
+
+test("CPF/CNPJ da assinatura aceita formatos pontuados e CNPJ alfanumérico", () => {
+  assert.equal(parseCpfCnpj("123.456.789-01"), "12345678901");
+  assert.equal(parseCpfCnpj("12.ABC.345/01DE-35"), "12ABC34501DE35");
+  assert.throws(() => parseCpfCnpj("123"));
 });
 
 test("juros diário não cobra antes do vencimento e arredonda moeda", () => {

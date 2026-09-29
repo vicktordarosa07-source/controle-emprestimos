@@ -25,6 +25,10 @@ export function SubscriptionPanel() {
         const live = state?.environment === "production";
         if (live && !window.confirm("Isto criará uma assinatura real do Recebify e poderá gerar cobranças recorrentes. Continuar?")) return;
         const result = await assinarPlanoFluxo(formData, live);
+        if (!result.ok) {
+          setError(result.error);
+          return;
+        }
         setMessage(`Plano ${result.plan} agendado para ${new Date(`${result.nextDueDate}T12:00:00`).toLocaleDateString("pt-BR")} (${result.environment}). A confirmação de pagamento depende do webhook do Asaas.`);
         const updated = await obterAssinaturaSaaS();
         setState(updated);
@@ -68,6 +72,9 @@ export function SubscriptionPanel() {
                 <p className="font-bold text-gray-950">{plan.name}</p>
                 <p className="text-sm text-gray-600">{plan.price === null ? "Preço ainda não configurado" : `${plan.price.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })} / mês`}</p>
                 <p className="text-xs text-gray-500">Um plano simples para começar. Cancele quando quiser.</p>
+                <label className="block text-sm font-medium text-gray-700" htmlFor={`cpf-cnpj-${plan.key}`}>CPF ou CNPJ do titular</label>
+                <input id={`cpf-cnpj-${plan.key}`} name="cpfCnpj" autoComplete="off" required maxLength={18} placeholder="Digite o CPF ou CNPJ" className="min-h-10 w-full border border-gray-300 px-3 text-sm" aria-describedby={`cpf-cnpj-help-${plan.key}`} />
+                <p id={`cpf-cnpj-help-${plan.key}`} className="text-xs text-gray-500">Necessário para o Asaas emitir a cobrança. O Recebify não armazena o documento.</p>
                 <button disabled={pending || !state.billingConfigured || plan.price === null || Boolean(sub?.asaas_subscription_id && sub.status !== "canceled")} className="min-h-10 bg-blue-700 px-4 text-sm font-bold text-white disabled:opacity-50">{pending ? "Processando…" : sub?.asaas_subscription_id ? "Assinatura em andamento" : "Assinar"}</button>
               </form>
             ))}
