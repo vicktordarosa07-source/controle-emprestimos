@@ -359,6 +359,8 @@ export async function restaurarBackup(formData: FormData) {
   return data as Record<string, number>;
 }
 
+const TRIAL_DAYS = 7;
+
 const PLAN_CONFIG = {
   starter: { name: "Recebify Essencial", monthlyPrice: process.env.SAAS_STARTER_MONTHLY_BRL },
 } as const;
@@ -369,7 +371,7 @@ export async function obterAssinaturaSaaS() {
   let { data, error } = await admin.from("saas_subscriptions").select("plan_key,status,trial_ends_at,period_ends_at,asaas_subscription_id").eq("user_id", user.id).maybeSingle();
   if (error) return { configured: false, billingConfigured: false, liveBillingEnabled: false, environment: "sandbox", subscription: null, plans: [] };
   if (!data) {
-    const trialEndsAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
+    const trialEndsAt = new Date(Date.now() + TRIAL_DAYS * 24 * 60 * 60 * 1000).toISOString();
     const result = await admin.from("saas_subscriptions").insert({ user_id: user.id, plan_key: "trial", status: "trialing", trial_ends_at: trialEndsAt }).select("plan_key,status,trial_ends_at,period_ends_at,asaas_subscription_id").single();
     data = result.data;
     error = result.error;
@@ -434,7 +436,7 @@ export async function assinarPlanoFluxo(formData: FormData, confirmarProducao = 
     if (!customerResponse.ok) throw new Error("Não foi possível atualizar o CPF/CNPJ. Confira os dados e tente novamente.");
   }
 
-  const due = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
+  const due = new Date(Date.now() + TRIAL_DAYS * 24 * 60 * 60 * 1000);
   const dateParts = new Intl.DateTimeFormat("en-GB", { timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(due).reduce<Record<string, string>>((result, part) => {
     if (part.type !== "literal") result[part.type] = part.value;
     return result;
