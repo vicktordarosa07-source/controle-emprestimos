@@ -4,7 +4,6 @@ import { useRef, useState, useTransition } from "react";
 import { atualizarConta, atualizarPreferenciasEmail } from "@/app/actions";
 import { MfaPanel } from "./MfaPanel";
 import { BackupRestoreForm } from "./BackupRestoreForm";
-import { AsaasSettingsPanel } from "./AsaasSettingsPanel";
 import { SubscriptionPanel } from "./SubscriptionPanel";
 
 type Props = {
@@ -135,8 +134,6 @@ export function AccountSettingsPanel({ email, fone, emailRemindersEnabled }: Pro
           <button className="min-h-10 bg-gray-950 px-4 text-sm font-bold text-white">Salvar preferência</button>
         </form>
       </section>
-
-      <div id="asaas" className="scroll-mt-24 border border-gray-200 bg-white shadow-sm"><AsaasSettingsPanel /></div>
 
       <div id="assinatura" className="scroll-mt-24 border border-gray-200 bg-white shadow-sm"><SubscriptionPanel /></div>
 

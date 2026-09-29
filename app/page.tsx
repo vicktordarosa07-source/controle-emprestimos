@@ -20,11 +20,15 @@ const MfaPanel = nextDynamic(
   () => import("./components/MfaPanel").then((module) => module.MfaPanel),
   { loading: () => <p role="status" className="text-sm text-gray-500">Carregando verificação…</p> },
 );
+const AsaasSettingsPanel = nextDynamic(
+  () => import("./components/AsaasSettingsPanel").then((module) => module.AsaasSettingsPanel),
+  { loading: () => <div role="status" className="rounded-2xl border border-slate-200 bg-white p-6 text-sm text-slate-500">Carregando integração…</div> },
+);
 
 export const dynamic = "force-dynamic";
 
 type ParcelaStatus = "Pendente" | "Pago" | string;
-type ViewFilter = "abertas" | "atrasadas" | "pagas" | "todas" | "lembretes" | "financeiro" | "historico" | "lixeira" | "configuracoes";
+type ViewFilter = "abertas" | "atrasadas" | "pagas" | "todas" | "lembretes" | "financeiro" | "historico" | "lixeira" | "integracoes" | "configuracoes";
 
 type ParcelaComCliente = {
   id: string;
@@ -116,6 +120,7 @@ const viewLabels: Record<ViewFilter, string> = {
   financeiro: "Financeiro",
   historico: "Histórico de pagamentos",
   lixeira: "Lixeira",
+  integracoes: "Integrações",
   configuracoes: "Configurações",
 };
 
@@ -302,7 +307,7 @@ function agruparPorCliente({
 }
 
 function normalizeView(value: string | undefined): ViewFilter {
-  if (value === "atrasadas" || value === "pagas" || value === "todas" || value === "lembretes" || value === "financeiro" || value === "historico" || value === "lixeira" || value === "configuracoes") {
+  if (value === "atrasadas" || value === "pagas" || value === "todas" || value === "lembretes" || value === "financeiro" || value === "historico" || value === "lixeira" || value === "integracoes" || value === "configuracoes") {
     return value;
   }
 
@@ -994,7 +999,7 @@ export default async function Home({ searchParams }: PageProps) {
       pendingUsers = (profiles as UserProfile[] | null) ?? [];
     }
 
-    if (activeView !== "configuracoes") {
+    if (activeView !== "configuracoes" && activeView !== "integracoes") {
       const needsPayments = activeView === "financeiro" || activeView === "historico";
       const needsContacts = activeView === "lembretes";
       const needsArchivedRows = activeView === "lixeira";
@@ -1139,7 +1144,7 @@ export default async function Home({ searchParams }: PageProps) {
         </section> : null}
 
         <nav aria-label="Áreas do sistema" className="flex flex-wrap gap-2 border border-gray-200 bg-white p-3">
-          {(["abertas", "lembretes", "financeiro", "historico", "lixeira", "configuracoes"] as ViewFilter[]).map((view) => (
+          {(["abertas", "lembretes", "financeiro", "historico", "lixeira", "integracoes", "configuracoes"] as ViewFilter[]).map((view) => (
             <a key={view} href={buildHref({ view, q, mes: view === "financeiro" ? mesSelecionado : undefined })}
               aria-current={activeView === view ? "page" : undefined}
               className={`min-h-10 px-4 py-2 text-sm font-bold ${activeView === view ? "bg-blue-700 text-white" : "border border-gray-300 text-gray-700 hover:bg-gray-50"}`}>
@@ -1154,6 +1159,24 @@ export default async function Home({ searchParams }: PageProps) {
           </> : null}
         </nav>
 
+        {activeView === "integracoes" ? (
+          <section className="mx-auto w-full max-w-5xl space-y-6" aria-labelledby="integrations-title">
+            <header className="overflow-hidden rounded-2xl border border-slate-200 bg-gradient-to-br from-white via-white to-blue-50 p-6 shadow-sm sm:p-8">
+              <div className="flex items-start gap-4">
+                <div aria-hidden="true" className="grid size-12 shrink-0 place-items-center rounded-xl bg-blue-100 text-blue-700">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="size-6"><path strokeLinecap="round" strokeLinejoin="round" d="M10 13a5 5 0 0 0 7.07 0l3-3A5 5 0 0 0 13 2.93l-1.72 1.72M14 11a5 5 0 0 0-7.07 0l-3 3A5 5 0 0 0 11 21.07l1.72-1.72" /></svg>
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-blue-700">Conecte suas ferramentas</p>
+                  <h2 id="integrations-title" className="mt-1 text-2xl font-bold tracking-tight text-slate-950">Integrações</h2>
+                  <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">Ligue o Recebify ao Asaas para emitir cobranças e acompanhar pagamentos sem sair da sua rotina.</p>
+                </div>
+              </div>
+            </header>
+            <AsaasSettingsPanel />
+          </section>
+        ) : null}
+
         {activeView === "configuracoes" ? (
           <section className="space-y-5" aria-labelledby="settings-title">
             <header className="border border-gray-200 bg-white p-5 shadow-sm">
@@ -1162,7 +1185,6 @@ export default async function Home({ searchParams }: PageProps) {
               <nav aria-label="Seções de configurações" className="mt-4 flex flex-wrap gap-2">
                 {[
                   ["#dados-da-conta", "Conta"],
-                  ["#asaas", "Recebimentos"],
                   ["#assinatura", "Plano"],
                   ["#seguranca", "Segurança"],
                   ["#backup", "Backup"],
