@@ -51,8 +51,8 @@ export function SubscriptionPanel() {
 
   if (!state) return <section className="border-t border-gray-200 p-4 text-sm text-gray-500">Carregando assinatura…</section>;
   const sub = state.subscription as { plan_key: string; status: string; trial_ends_at: string | null; period_ends_at: string | null; asaas_subscription_id: string | null } | null;
-  const expires = sub?.trial_ends_at ?? sub?.period_ends_at;
-  const statusLabel = sub ? ({ trialing: "em avaliação", active: "ativa", canceled: "cancelada", overdue: "atrasada", pending: "pendente", inactive: "inativa" }[sub.status] ?? sub.status) : "período de avaliação";
+  const expires = state.access?.access_until ?? sub?.trial_ends_at ?? sub?.period_ends_at;
+  const statusLabel = sub ? ({ trialing: "em avaliação", active: "ativa", canceled: "cancelada", overdue: "atrasada", past_due: "pagamento atrasado", pending: "pendente", inactive: "inativa", incomplete: "incompleta" }[sub.status] ?? sub.status) : "período de avaliação";
 
   return (
     <section className="border-t border-gray-200 p-4">
@@ -62,7 +62,7 @@ export function SubscriptionPanel() {
       ) : (
         <>
           <p className="mt-1 text-sm text-gray-700">Status: <strong>{statusLabel}</strong>{expires && sub?.status !== "canceled" ? ` • até ${new Date(expires).toLocaleDateString("pt-BR")}` : ""}</p>
-          <p className="mt-1 text-xs text-gray-600">Limites de uso e bloqueio por plano ainda não estão ativos.</p>
+          {state.access?.enforcement_enabled ? <p className="mt-1 text-xs text-gray-600">{state.access.can_write ? "Acesso para cadastrar e editar está liberado." : "Acesso em modo de consulta. Seus dados e exportações continuam disponíveis."}</p> : <p className="mt-1 text-xs text-amber-800">A cobrança do plano ainda não está ativada; o acesso não será bloqueado até a configuração do administrador.</p>}
           {!state.billingConfigured ? <p role="status" className="mt-2 border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">A assinatura online está temporariamente indisponível. Tente novamente mais tarde ou fale com o suporte.</p> : null}
           {state.environment === "production" && !state.liveBillingEnabled ? <p role="status" className="mt-2 border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">A assinatura online está temporariamente indisponível. Fale com o suporte se precisar de ajuda.</p> : null}
           {sub?.asaas_subscription_id && sub.status !== "canceled" ? <button type="button" disabled={pending} onClick={cancelSubscription} className="mt-2 min-h-9 border border-red-300 px-3 text-sm font-bold text-red-800 disabled:opacity-50">Cancelar assinatura</button> : null}

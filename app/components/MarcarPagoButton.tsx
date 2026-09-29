@@ -6,9 +6,10 @@ import { marcarComoPago, reabrirParcela } from "@/app/actions";
 type Props = {
   parcelaId: string;
   status?: "Pendente" | "Pago" | string;
+  canWrite?: boolean;
 };
 
-export function MarcarPagoButton({ parcelaId, status = "Pendente" }: Props) {
+export function MarcarPagoButton({ parcelaId, status = "Pendente", canWrite = true }: Props) {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const isPago = status === "Pago";
@@ -41,7 +42,8 @@ export function MarcarPagoButton({ parcelaId, status = "Pendente" }: Props) {
     <div className="space-y-2">
       <button
         onClick={handleClick}
-        disabled={isPending}
+        disabled={isPending || !canWrite}
+        title={!canWrite ? "Assine um plano para registrar alterações" : undefined}
         className={
           isPago
             ? "w-full sm:w-auto border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 transition hover:bg-gray-50 disabled:opacity-50"

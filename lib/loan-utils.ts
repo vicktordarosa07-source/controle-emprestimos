@@ -199,9 +199,10 @@ export function parseDateOnly(value: FormDataEntryValue | null, field: string) {
     throw new Error(`${field} deve estar no formato AAAA-MM-DD`);
   }
 
-  const date = new Date(`${raw}T12:00:00`);
+  const [year, month, day] = raw.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
 
-  if (Number.isNaN(date.getTime()) || formatDateOnly(date) !== raw) {
+  if (date.toISOString().slice(0, 10) !== raw) {
     throw new Error(`${field} invalida`);
   }
 
@@ -209,11 +210,14 @@ export function parseDateOnly(value: FormDataEntryValue | null, field: string) {
 }
 
 export function formatDateOnly(date: Date) {
-  const yyyy = date.getFullYear();
-  const mm = String(date.getMonth() + 1).padStart(2, "0");
-  const dd = String(date.getDate()).padStart(2, "0");
-
-  return `${yyyy}-${mm}-${dd}`;
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+  const values = Object.fromEntries(parts.map(({ type, value }) => [type, value]));
+  return `${values.year}-${values.month}-${values.day}`;
 }
 
 export function addMonthsPreservingDueDay(dateOnly: string, months: number) {
@@ -221,19 +225,13 @@ export function addMonthsPreservingDueDay(dateOnly: string, months: number) {
   const targetMonthIndex = month - 1 + months;
   const targetYear = year + Math.floor(targetMonthIndex / 12);
   const normalizedMonthIndex = ((targetMonthIndex % 12) + 12) % 12;
-  const lastDay = new Date(targetYear, normalizedMonthIndex + 1, 0).getDate();
-
-  return formatDateOnly(
-    new Date(targetYear, normalizedMonthIndex, Math.min(day, lastDay), 12)
-  );
+  const lastDay = new Date(Date.UTC(targetYear, normalizedMonthIndex + 1, 0)).getUTCDate();
+  return new Date(Date.UTC(targetYear, normalizedMonthIndex, Math.min(day, lastDay))).toISOString().slice(0, 10);
 }
 
 export function addDays(dateOnly: string, days: number) {
   const [year, month, day] = dateOnly.split("-").map(Number);
-  const date = new Date(year, month - 1, day, 12);
-  date.setDate(date.getDate() + days);
-
-  return formatDateOnly(date);
+  return new Date(Date.UTC(year, month - 1, day + days)).toISOString().slice(0, 10);
 }
 
 function getDataVencimento({
@@ -296,11 +294,12 @@ export function buildParcelas({
 }
 
 export function diasAtraso(dataVencimento: string, hoje: Date) {
-  const venc = new Date(`${dataVencimento}T12:00:00`);
-  const baseHoje = new Date(hoje);
-  baseHoje.setHours(12, 0, 0, 0);
-
-  return Math.floor((baseHoje.getTime() - venc.getTime()) / MS_PER_DAY);
+  const todayInSaoPaulo = formatDateOnly(hoje);
+  const [year, month, day] = todayInSaoPaulo.split("-").map(Number);
+  const [dueYear, dueMonth, dueDay] = dataVencimento.split("-").map(Number);
+  const todayUtc = Date.UTC(year, month - 1, day);
+  const dueUtc = Date.UTC(dueYear, dueMonth - 1, dueDay);
+  return Math.floor((todayUtc - dueUtc) / MS_PER_DAY);
 }
 
 function roundCurrency(value: number) {

@@ -4,6 +4,7 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "Recebify | Gestão de cobranças",
   description: "Organize cobranças, vencimentos e pagamentos em um só lugar.",
+  icons: { icon: "/icon.svg", apple: "/icon.svg" },
 };
 
 export default function RootLayout({

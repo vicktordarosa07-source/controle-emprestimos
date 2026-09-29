@@ -3,11 +3,15 @@ import test from "node:test";
 import {
   buildParcelas,
   calcularJurosAtraso,
+  addDays,
+  diasAtraso,
+  formatDateOnly,
   parseCustomIntervalDays,
   parseCpfCnpj,
   parseDateOnly,
   parseInstallmentCount,
 } from "../lib/loan-utils.ts";
+import { getFirstBillingDate, getTrialEnd, getTrialEndDateOnly } from "../lib/trial.ts";
 
 test("parcelas rateiam centavos sem perder o valor total", () => {
   const parcelas = buildParcelas({
@@ -51,4 +55,20 @@ test("juros diário não cobra antes do vencimento e arredonda moeda", () => {
   assert.equal(calcularJurosAtraso({ ...base, tipo: "valor" }), 1.5);
   assert.equal(calcularJurosAtraso({ ...base, tipo: "percentual" }), 1.5);
   assert.equal(calcularJurosAtraso({ ...base, dataVencimento: "2026-01-04", tipo: "valor" }), 0);
+});
+
+test("datas de vencimento usam o calendário de São Paulo independentemente do fuso do servidor", () => {
+  assert.equal(formatDateOnly(new Date("2026-09-29T02:30:00.000Z")), "2026-09-28");
+  assert.equal(formatDateOnly(new Date("2026-09-29T03:00:00.000Z")), "2026-09-29");
+  assert.equal(addDays("2026-09-29", 7), "2026-10-06");
+  assert.equal(diasAtraso("2026-09-28", new Date("2026-09-29T02:30:00.000Z")), 0);
+  assert.equal(diasAtraso("2026-09-27", new Date("2026-09-29T02:30:00.000Z")), 1);
+});
+
+test("trial começa na criação da conta e assinatura vencida agenda a primeira cobrança para hoje", () => {
+  const createdAt = "2026-09-22T12:00:00.000Z";
+  assert.equal(getTrialEnd(createdAt).toISOString(), "2026-09-29T12:00:00.000Z");
+  assert.equal(getTrialEndDateOnly(createdAt), "2026-09-29");
+  assert.equal(getFirstBillingDate(createdAt, new Date("2026-09-25T15:00:00.000Z")), "2026-09-29");
+  assert.equal(getFirstBillingDate(createdAt, new Date("2026-10-01T15:00:00.000Z")), "2026-10-01");
 });

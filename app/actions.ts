@@ -17,6 +17,7 @@ import {
   parsePositiveNumber,
   parseRequiredText,
 } from "@/lib/loan-utils";
+import { getFirstBillingDate, getTrialEnd } from "@/lib/trial";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { revalidatePath } from "next/cache";
 import { decryptAsaasCredential } from "@/lib/asaas-crypto";
@@ -50,8 +51,16 @@ async function requireUser() {
   return { supabase, user };
 }
 
+async function requireWriteAccess(supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>) {
+  const { data, error } = await supabase.rpc("has_saas_write_access");
+  // Compatibilidade durante a aplicação da migração: o RLS antigo continua valendo.
+  if (error) return;
+  if (data !== true) throw new Error("Seu período de avaliação terminou. Assine um plano para voltar a cadastrar e editar cobranças; seus dados continuam disponíveis para consulta e exportação.");
+}
+
 export async function criarCobranca(formData: FormData) {
   const { supabase, user } = await requireUser();
+  await requireWriteAccess(supabase);
   const nome = parseRequiredText(formData.get("nome"), "Nome do cliente");
   const descricao = parseOptionalText(formData.get("descricao"), 160);
   const endereco = parseOptionalText(formData.get("endereco"), 240);
@@ -127,6 +136,7 @@ export async function criarCobranca(formData: FormData) {
 
 export async function marcarComoPago(parcelaId: string) {
   const { supabase } = await requireUser();
+  await requireWriteAccess(supabase);
   const { data: linkedCharges, error: chargesError } = await supabase
     .from("asaas_charges")
     .select("id")
@@ -148,6 +158,7 @@ export async function marcarComoPago(parcelaId: string) {
 
 export async function reabrirParcela(parcelaId: string) {
   const { supabase } = await requireUser();
+  await requireWriteAccess(supabase);
   const { error } = await supabase.rpc("reabrir_parcela", {
     p_parcela_id: parcelaId,
   });
@@ -161,6 +172,7 @@ export async function reabrirParcela(parcelaId: string) {
 
 export async function registrarPagamentoCliente(formData: FormData) {
   const { supabase } = await requireUser();
+  await requireWriteAccess(supabase);
   const clienteId = parseRequiredText(formData.get("cliente_id"), "Cliente");
   const valorRecebido = parsePositiveNumber(formData.get("valor_pago"), "Valor pago");
   const { data: openInstallments, error: installmentsError } = await supabase
@@ -194,6 +206,7 @@ export async function registrarPagamentoCliente(formData: FormData) {
 
 export async function atualizarCliente(formData: FormData) {
   const { supabase } = await requireUser();
+  await requireWriteAccess(supabase);
   const clienteId = parseRequiredText(formData.get("cliente_id"), "Cliente");
   const nome = parseRequiredText(formData.get("nome"), "Nome do cliente");
   const endereco = parseOptionalText(formData.get("endereco"), 240);
@@ -214,6 +227,7 @@ export async function atualizarCliente(formData: FormData) {
 
 export async function registrarContatoCobranca(formData: FormData) {
   const { supabase } = await requireUser();
+  await requireWriteAccess(supabase);
   const parcelaId = parseRequiredText(formData.get("parcela_id"), "Cobrança");
   const canal = String(formData.get("canal") ?? "manual");
   const observacao = parseOptionalText(formData.get("observacao"), 500);
@@ -228,6 +242,7 @@ export async function registrarContatoCobranca(formData: FormData) {
 
 export async function arquivarCobranca(emprestimoId: string) {
   const { supabase } = await requireUser();
+  await requireWriteAccess(supabase);
   const { error } = await supabase.rpc("arquivar_cobranca", {
     p_emprestimo_id: emprestimoId,
   });
@@ -237,6 +252,7 @@ export async function arquivarCobranca(emprestimoId: string) {
 
 export async function restaurarCobranca(emprestimoId: string) {
   const { supabase } = await requireUser();
+  await requireWriteAccess(supabase);
   const { error } = await supabase.rpc("restaurar_cobranca", {
     p_emprestimo_id: emprestimoId,
   });
@@ -335,6 +351,7 @@ export async function atualizarPreferenciasEmail(formData: FormData) {
 
 export async function restaurarBackup(formData: FormData) {
   const { supabase } = await requireUser();
+  await requireWriteAccess(supabase);
   const file = formData.get("backup");
   if (!(file instanceof File) || file.size === 0) {
     throw new Error("Selecione um arquivo JSON de backup.");
@@ -359,19 +376,20 @@ export async function restaurarBackup(formData: FormData) {
   return data as Record<string, number>;
 }
 
-const TRIAL_DAYS = 7;
-
 const PLAN_CONFIG = {
   starter: { name: "Recebify Essencial", monthlyPrice: process.env.SAAS_STARTER_MONTHLY_BRL },
 } as const;
 
 export async function obterAssinaturaSaaS() {
-  const { user } = await requireUser();
+  const { user, supabase } = await requireUser();
+  const accessResult = await supabase.rpc("get_own_saas_access");
+  const accessRows = !accessResult.error ? accessResult.data as { enforcement_enabled: boolean; can_write: boolean; subscription_status: string | null; access_until: string | null }[] | null : null;
+  const access = accessRows?.[0] ?? null;
   const admin = createSupabaseAdminClient();
   let { data, error } = await admin.from("saas_subscriptions").select("plan_key,status,trial_ends_at,period_ends_at,asaas_subscription_id").eq("user_id", user.id).maybeSingle();
-  if (error) return { configured: false, billingConfigured: false, liveBillingEnabled: false, environment: "sandbox", subscription: null, plans: [] };
+  if (error) return { configured: false, billingConfigured: false, liveBillingEnabled: false, environment: "sandbox", subscription: null, plans: [], access };
   if (!data) {
-    const trialEndsAt = new Date(Date.now() + TRIAL_DAYS * 24 * 60 * 60 * 1000).toISOString();
+    const trialEndsAt = getTrialEnd(user.created_at ?? new Date()).toISOString();
     const result = await admin.from("saas_subscriptions").insert({ user_id: user.id, plan_key: "trial", status: "trialing", trial_ends_at: trialEndsAt }).select("plan_key,status,trial_ends_at,period_ends_at,asaas_subscription_id").single();
     data = result.data;
     error = result.error;
@@ -383,6 +401,7 @@ export async function obterAssinaturaSaaS() {
     subscription: error ? null : data,
     environment: process.env.ASAAS_PLATFORM_ENV === "production" ? "production" : "sandbox",
     plans: Object.entries(PLAN_CONFIG).map(([key, plan]) => ({ key, name: plan.name, price: plan.monthlyPrice ? Number(plan.monthlyPrice) : null })),
+    access,
   };
 }
 
@@ -436,12 +455,8 @@ export async function assinarPlanoFluxo(formData: FormData, confirmarProducao = 
     if (!customerResponse.ok) throw new Error("Não foi possível atualizar o CPF/CNPJ. Confira os dados e tente novamente.");
   }
 
-  const due = new Date(Date.now() + TRIAL_DAYS * 24 * 60 * 60 * 1000);
-  const dateParts = new Intl.DateTimeFormat("en-GB", { timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(due).reduce<Record<string, string>>((result, part) => {
-    if (part.type !== "literal") result[part.type] = part.value;
-    return result;
-  }, {});
-  const nextDueDate = `${dateParts.year}-${dateParts.month}-${dateParts.day}`;
+  const trialEndsAt = getTrialEnd(user.created_at ?? new Date());
+  const nextDueDate = getFirstBillingDate(user.created_at ?? new Date(), new Date());
   const subscriptionsUrl = new URL(`${base}/subscriptions`);
   subscriptionsUrl.searchParams.set("externalReference", user.id);
   subscriptionsUrl.searchParams.set("limit", "10");
@@ -464,7 +479,7 @@ export async function assinarPlanoFluxo(formData: FormData, confirmarProducao = 
     providerSubscriptionId = providerSubscription.id;
   }
   const { error } = await admin.from("saas_subscriptions").upsert({
-    user_id: user.id, plan_key: planKey, status: "trialing", trial_ends_at: `${nextDueDate}T00:00:00-03:00`,
+    user_id: user.id, plan_key: planKey, status: "trialing", trial_ends_at: trialEndsAt.toISOString(),
     asaas_customer_id: customerId, asaas_subscription_id: providerSubscriptionId,
     asaas_environment: environment, updated_at: new Date().toISOString(),
   });
@@ -498,6 +513,7 @@ export async function cancelarAssinaturaFluxo() {
 
 export async function criarLinkAsaas(parcelaId: string, confirmarCobrancaReal = false) {
   const { supabase, user } = await requireUser();
+  await requireWriteAccess(supabase);
   if (!/^[0-9a-f-]{36}$/i.test(parcelaId)) throw new Error("Cobrança inválida.");
   const { data: parcela, error: parcelaError } = await supabase
     .from("parcelas")

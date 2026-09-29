@@ -5,7 +5,7 @@ import { criarCobranca } from "@/app/actions";
 
 const fieldClass = "w-full border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500";
 
-export function NovoEmprestimoModal() {
+export function NovoEmprestimoModal({ canWrite = true }: { canWrite?: boolean }) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -29,7 +29,7 @@ export function NovoEmprestimoModal() {
 
   return (
     <>
-      <button onClick={() => { setError(null); setPeriodicidade("mensal"); setOpen(true); }} className="w-full rounded-xl bg-blue-700 px-5 py-3 font-semibold text-white shadow-sm transition hover:bg-blue-800 sm:w-auto">
+      <button disabled={!canWrite} title={!canWrite ? "Assine um plano para voltar a criar cobranças" : undefined} onClick={() => { setError(null); setPeriodicidade("mensal"); setOpen(true); }} className="w-full rounded-xl bg-blue-700 px-5 py-3 font-semibold text-white shadow-sm transition hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto">
         + Nova cobrança
       </button>
       {open && (

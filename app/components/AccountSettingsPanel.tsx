@@ -10,9 +10,10 @@ type Props = {
   email: string;
   fone: string;
   emailRemindersEnabled: boolean;
+  canWrite?: boolean;
 };
 
-export function AccountSettingsPanel({ email, fone, emailRemindersEnabled }: Props) {
+export function AccountSettingsPanel({ email, fone, emailRemindersEnabled, canWrite = true }: Props) {
   const [isPending, startTransition] = useTransition();
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -146,7 +147,7 @@ export function AccountSettingsPanel({ email, fone, emailRemindersEnabled }: Pro
       <section id="backup" className="settings-section scroll-mt-24 border border-gray-200 bg-white p-5 shadow-sm">
         <h3 className="font-bold text-gray-950">Restaurar backup</h3>
         <p className="mt-1 text-sm text-amber-800">A restauração não sobrescreve registros: qualquer ID já existente cancela toda a operação. Faça isso de preferência em uma conta vazia.</p>
-        <BackupRestoreForm />
+        {canWrite ? <BackupRestoreForm /> : <p className="mt-3 text-sm text-amber-900">Restauração pausada durante o modo de consulta. Exporte os dados agora e assine um plano para importar backups.</p>}
       </section>
     </div>
   );

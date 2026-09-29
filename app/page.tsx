@@ -1,5 +1,6 @@
 import nextDynamic from "next/dynamic";
-import { calcularJurosAtraso, diasAtraso, formatDateOnly } from "@/lib/loan-utils";
+import { addDays, calcularJurosAtraso, diasAtraso, formatDateOnly } from "@/lib/loan-utils";
+import { fetchAllRows } from "@/lib/pagination";
 import type { PeriodicidadeVencimento, TipoJurosAtraso } from "@/lib/loan-utils";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { AuthPanel, SignOutButton } from "./components/AuthPanel";
@@ -456,10 +457,12 @@ function ParcelaCard({
   parcela,
   hoje,
   hojeStr,
+  canWrite,
 }: {
   parcela: ParcelaComCliente;
   hoje: Date;
   hojeStr: string;
+  canWrite: boolean;
 }) {
   const nomeCliente = getNomeCliente(parcela);
   const isPaga = parcela.status === "Pago";
@@ -539,7 +542,7 @@ function ParcelaCard({
         ) : null}
       </div>
 
-      <MarcarPagoButton parcelaId={parcela.id} status={parcela.status} />
+      <MarcarPagoButton parcelaId={parcela.id} status={parcela.status} canWrite={canWrite} />
     </article>
   );
 }
@@ -548,10 +551,12 @@ function ParcelasDoCliente({
   parcelas,
   hoje,
   hojeStr,
+  canWrite,
 }: {
   parcelas: ParcelaComCliente[];
   hoje: Date;
   hojeStr: string;
+  canWrite: boolean;
 }) {
   return (
     <>
@@ -624,7 +629,7 @@ function ParcelasDoCliente({
                     ) : null}
                   </td>
                   <td className="px-4 py-3">
-                    <MarcarPagoButton parcelaId={parcela.id} status={parcela.status} />
+                    <MarcarPagoButton parcelaId={parcela.id} status={parcela.status} canWrite={canWrite} />
                   </td>
                 </tr>
               );
@@ -640,6 +645,7 @@ function ParcelasDoCliente({
             parcela={parcela}
             hoje={hoje}
             hojeStr={hojeStr}
+            canWrite={canWrite}
           />
         ))}
       </div>
@@ -651,10 +657,12 @@ function ClienteCard({
   cliente,
   hoje,
   hojeStr,
+  canWrite,
 }: {
   cliente: ClienteResumo;
   hoje: Date;
   hojeStr: string;
+  canWrite: boolean;
 }) {
   const proximaParcela = cliente.proximaParcela;
   const cadastro = cliente.cadastro;
@@ -720,7 +728,7 @@ function ClienteCard({
       </summary>
 
       <div className="border-t border-gray-200 p-5 pt-4">
-        <form action={atualizarCliente} className="mb-5 space-y-3 border border-gray-200 bg-gray-50 p-4">
+        {canWrite ? <form action={atualizarCliente} className="mb-5 space-y-3 border border-gray-200 bg-gray-50 p-4">
           <input type="hidden" name="cliente_id" value={cliente.clienteId} />
           <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
             <h4 className="text-sm font-bold text-gray-950">Dados do cliente</h4>
@@ -782,14 +790,14 @@ function ClienteCard({
               />
             </div>
           </div>
-        </form>
+        </form> : <p className="mb-5 border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">Edição pausada até a assinatura ser regularizada. A consulta e exportação continuam disponíveis.</p>}
 
         <div className="mb-5 space-y-3 border border-gray-200 p-4">
           <h4 className="text-sm font-bold text-gray-950">Cobranças deste cliente</h4>
           {Array.from(new Map(cliente.parcelasVisiveis.map((parcela) => [parcela.emprestimo_id, parcela])).values()).map((parcela) => (
             <div key={parcela.emprestimo_id} className="flex flex-col justify-between gap-2 border-t border-gray-100 pt-3 sm:flex-row sm:items-center">
               <div><p className="text-sm font-semibold text-gray-800">{parcela.emprestimos?.descricao || "Cobrança"}</p><p className="text-xs text-gray-500">{cliente.parcelasVisiveis.filter((item) => item.emprestimo_id === parcela.emprestimo_id).length} parcela(s) nesta visão</p></div>
-              <ArquivarCobrancaButton emprestimoId={parcela.emprestimo_id} />
+              {canWrite ? <ArquivarCobrancaButton emprestimoId={parcela.emprestimo_id} /> : null}
             </div>
           ))}
         </div>
@@ -814,12 +822,12 @@ function ClienteCard({
                 </p>
               ) : null}
             </div>
-            <div className="w-full sm:max-w-sm">
+            {canWrite ? <div className="w-full sm:max-w-sm">
               <RegistrarPagamentoForm
                 clienteId={cliente.clienteId}
                 saldoAberto={cliente.totalRestante}
               />
-            </div>
+            </div> : null}
           </div>
         ) : null}
 
@@ -827,6 +835,7 @@ function ClienteCard({
           parcelas={cliente.parcelasVisiveis}
           hoje={hoje}
           hojeStr={hojeStr}
+          canWrite={canWrite}
         />
       </div>
     </details>
@@ -838,11 +847,13 @@ function ClientesSection({
   clientes,
   hoje,
   hojeStr,
+  canWrite,
 }: {
   title: string;
   clientes: ClienteResumo[];
   hoje: Date;
   hojeStr: string;
+  canWrite: boolean;
 }) {
   return (
     <section className="space-y-3">
@@ -865,6 +876,7 @@ function ClientesSection({
               cliente={cliente}
               hoje={hoje}
               hojeStr={hojeStr}
+              canWrite={canWrite}
             />
           ))}
         </div>
@@ -876,7 +888,7 @@ function ClientesSection({
 export default async function Home({ searchParams }: PageProps) {
   const params = (await searchParams) ?? {};
   const q = (params.q ?? "").trim();
-  const mesSelecionado = /^\d{4}-\d{2}$/.test(params.mes ?? "") ? params.mes! : new Date().toISOString().slice(0, 7);
+  const mesSelecionado = /^\d{4}-\d{2}$/.test(params.mes ?? "") ? params.mes! : formatDateOnly(new Date()).slice(0, 7);
   const normalizedQuery = q.toLocaleLowerCase("pt-BR");
   const activeView = normalizeView(params.view);
   const hoje = new Date();
@@ -890,6 +902,7 @@ export default async function Home({ searchParams }: PageProps) {
   let userEmail = "";
   let userFone = "";
   let emailRemindersEnabled = false;
+  let canWrite = true;
 
   try {
     const supabase = await createSupabaseServerClient();
@@ -919,6 +932,11 @@ export default async function Home({ searchParams }: PageProps) {
     }
 
     userEmail = user.email ?? "";
+    const accessResult = await supabase.rpc("get_own_saas_access");
+    if (!accessResult.error) {
+      const accessRows = accessResult.data as { can_write?: boolean }[] | null;
+      if (accessRows?.length) canWrite = accessRows[0].can_write !== false;
+    }
 
     const { data: profile, error: profileError } = await supabase
       .from("profiles")
@@ -960,34 +978,33 @@ export default async function Home({ searchParams }: PageProps) {
         `)
         .is("emprestimos.deleted_at", null)
         .is("emprestimos.clientes.deleted_at", null)
-        .order("data_vencimento", { ascending: true });
-      const pagamentosQuery = needsPayments
-        ? supabase.from("pagamentos").select("id, cliente_id, valor_total, recebido_em, tipo, referencia_pagamento_id, clientes(id, nome, telefone, cpf), pagamento_itens(valor_principal, valor_juros, parcelas(numero))").order("recebido_em", { ascending: false })
-        : Promise.resolve({ data: [], error: null });
-      const contatosQuery = needsContacts
-        ? supabase.from("cobranca_contatos").select("id, parcela_id, canal, observacao, realizado_em").order("realizado_em", { ascending: false })
-        : Promise.resolve({ data: [], error: null });
-      const arquivadasQuery = needsArchivedRows
-        ? supabase.from("emprestimos").select("id, descricao, deleted_at, clientes!inner(id, nome, telefone, cpf, endereco), parcelas(numero, valor, status, data_vencimento)", { count: "exact" }).not("deleted_at", "is", null).order("deleted_at", { ascending: false })
-        : supabase.from("emprestimos").select("id", { count: "exact", head: true }).not("deleted_at", "is", null);
-
-      const [parcelasResult, pagamentosResult, contatosResult, arquivadasResult] = await Promise.all([
-        parcelasQuery,
-        pagamentosQuery,
-        contatosQuery,
-        arquivadasQuery,
+        .order("data_vencimento", { ascending: true })
+        .order("id", { ascending: true });
+      const [parcelasResult, pagamentosResult, contatosResult, arquivadasResult, arquivadasCountResult] = await Promise.all([
+        fetchAllRows((from, to) => parcelasQuery.range(from, to)),
+        needsPayments
+          ? fetchAllRows((from, to) => supabase.from("pagamentos").select("id, cliente_id, valor_total, recebido_em, tipo, referencia_pagamento_id, clientes(id, nome, telefone, cpf), pagamento_itens(valor_principal, valor_juros, parcelas(numero))").order("recebido_em", { ascending: false }).order("id", { ascending: true }).range(from, to))
+          : Promise.resolve([]),
+        needsContacts
+          ? fetchAllRows((from, to) => supabase.from("cobranca_contatos").select("id, parcela_id, canal, observacao, realizado_em").order("realizado_em", { ascending: false }).order("id", { ascending: true }).range(from, to))
+          : Promise.resolve([]),
+        needsArchivedRows
+          ? fetchAllRows((from, to) => supabase.from("emprestimos").select("id, descricao, deleted_at, clientes!inner(id, nome, telefone, cpf, endereco), parcelas(numero, valor, status, data_vencimento)").not("deleted_at", "is", null).order("deleted_at", { ascending: false }).order("id", { ascending: true }).range(from, to))
+          : Promise.resolve([]),
+        !needsArchivedRows
+          ? supabase.from("emprestimos").select("id", { count: "exact", head: true }).not("deleted_at", "is", null)
+          : Promise.resolve(null),
       ]);
-
-      if (parcelasResult.error) throw new Error(parcelasResult.error.message);
-      if (pagamentosResult.error) throw new Error(pagamentosResult.error.message);
-      if (contatosResult.error) throw new Error(contatosResult.error.message);
-      if (arquivadasResult.error) throw new Error(arquivadasResult.error.message);
-
-      parcelas = (parcelasResult.data as unknown as ParcelaComCliente[]) ?? [];
-      pagamentos = (pagamentosResult.data ?? []) as unknown as PagamentoResumo[];
-      contatos = (contatosResult.data ?? []) as unknown as ContatoResumo[];
-      arquivadas = (arquivadasResult.data ?? []) as unknown as CobrancaArquivada[];
-      arquivadasCount = arquivadasResult.count ?? arquivadas.length;
+      parcelas = parcelasResult as unknown as ParcelaComCliente[];
+      pagamentos = pagamentosResult as unknown as PagamentoResumo[];
+      contatos = contatosResult as unknown as ContatoResumo[];
+      if (needsArchivedRows) {
+        arquivadas = arquivadasResult as unknown as CobrancaArquivada[];
+        arquivadasCount = arquivadas.length;
+      } else {
+        if (arquivadasCountResult?.error) throw new Error(arquivadasCountResult.error.message);
+        arquivadasCount = arquivadasCountResult?.count ?? 0;
+      }
     }
   } catch (error) {
     fetchError = (error as Error).message;
@@ -1001,15 +1018,13 @@ export default async function Home({ searchParams }: PageProps) {
   const abertas = filtradasPorBusca.filter((parcela) => parcela.status !== "Pago");
   const atrasadas = abertas.filter((parcela) => parcela.data_vencimento < hojeStr);
   const aVencer = abertas.filter((parcela) => parcela.data_vencimento >= hojeStr);
-  const limiteLembretes = new Date(hoje);
-  limiteLembretes.setDate(limiteLembretes.getDate() + 7);
-  const limiteLembretesStr = formatDateOnly(limiteLembretes);
+  const limiteLembretesStr = addDays(hojeStr, 7);
   const lembretes = abertas.filter((parcela) => parcela.data_vencimento <= limiteLembretesStr);
   const mesInicio = `${mesSelecionado}-01`;
   const [anoMesAno, anoMesMes] = mesSelecionado.split("-").map(Number);
-  const proximoMes = new Date(anoMesAno, anoMesMes, 1);
-  const mesFim = formatDateOnly(new Date(proximoMes.getFullYear(), proximoMes.getMonth(), 0));
-  const mesAnterior = new Date(anoMesAno, anoMesMes - 2, 1).toISOString().slice(0, 7);
+  const mesFim = new Date(Date.UTC(anoMesAno, anoMesMes, 0)).toISOString().slice(0, 10);
+  const mesAnteriorDate = new Date(Date.UTC(anoMesAno, anoMesMes - 2, 1));
+  const mesAnterior = `${mesAnteriorDate.getUTCFullYear()}-${String(mesAnteriorDate.getUTCMonth() + 1).padStart(2, "0")}`;
   const pagamentosFiltrados = pagamentos.filter((p) => {
     if (!normalizedQuery) return true;
     const client = p.clientes;
@@ -1058,7 +1073,7 @@ export default async function Home({ searchParams }: PageProps) {
             </p>
           </div>
           <div className="header-actions flex items-center gap-2">
-            <NovoEmprestimoModal />
+            <NovoEmprestimoModal canWrite={canWrite} />
             <SignOutButton />
           </div>
         </div>
@@ -1088,6 +1103,7 @@ export default async function Home({ searchParams }: PageProps) {
         </aside>
 
         <div className="app-content min-w-0 flex-1 space-y-6">
+          {!canWrite ? <div role="status" className="border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950">Seu período de avaliação terminou. Seus dados continuam disponíveis para consulta e exportação; assine um plano em <a className="font-bold underline" href={buildHref({ view: "configuracoes", q })}>Configurações</a> para voltar a cadastrar, editar e registrar pagamentos.</div> : null}
           <nav aria-label="Áreas do sistema" className="app-mobile-nav flex gap-2 overflow-x-auto border border-gray-200 bg-white p-2 md:hidden">
             {primaryNavigation.map(({ view, label, count }) => (
               <a key={view} href={buildHref({ view, q, mes: view === "financeiro" ? mesSelecionado : undefined })}
@@ -1151,7 +1167,7 @@ export default async function Home({ searchParams }: PageProps) {
                 ))}
               </nav>
             </header>
-            <AccountSettingsPanel email={userEmail} fone={userFone} emailRemindersEnabled={emailRemindersEnabled} />
+            <AccountSettingsPanel email={userEmail} fone={userFone} emailRemindersEnabled={emailRemindersEnabled} canWrite={canWrite} />
           </section>
         ) : null}
 
@@ -1181,7 +1197,7 @@ export default async function Home({ searchParams }: PageProps) {
               return <article key={parcela.id} className="space-y-3 border border-gray-200 bg-white p-4">
                 <div className="flex flex-col justify-between gap-2 sm:flex-row"><div><h3 className="font-bold text-gray-950">{getNomeCliente(parcela)} · parcela {parcela.numero}</h3><p className="text-sm text-gray-600">Vencimento {formatDate(parcela.data_vencimento)} · {parcela.data_vencimento < hojeStr ? `${diasAtraso(parcela.data_vencimento, hoje)} dia(s) de atraso` : parcela.data_vencimento === hojeStr ? "vence hoje" : "próximos 7 dias"}</p></div><p className="font-bold text-red-700">{formatCurrency(getSaldoParcela(parcela, hoje))}</p></div>
                 {historicoContato.length ? <ul className="space-y-1 text-xs text-gray-500">{historicoContato.map((item) => <li key={item.id}>{new Date(item.realizado_em).toLocaleString("pt-BR")} · {item.canal}{item.observacao ? ` · ${item.observacao}` : ""}</li>)}</ul> : <p className="text-xs text-gray-500">Nenhum contato registrado.</p>}
-                <ContatoCobrancaForm parcelaId={parcela.id} />
+                {canWrite ? <ContatoCobrancaForm parcelaId={parcela.id} /> : null}
               </article>;
             })}
           </section>
@@ -1202,7 +1218,7 @@ export default async function Home({ searchParams }: PageProps) {
 
         {activeView === "lixeira" ? (
           <section className="space-y-3"><div><h2 className="text-lg font-bold text-gray-950">Cobranças arquivadas</h2><p className="text-sm text-gray-600">Arquivar não apaga dados nem altera pagamentos; restaurar traz a cobrança de volta aos totais.</p></div>
-            {arquivadas.length === 0 ? <div className="border border-gray-200 bg-white p-6 text-sm text-gray-600">A lixeira está vazia.</div> : arquivadas.map((item) => { const cliente = Array.isArray(item.clientes) ? item.clientes[0] : item.clientes; return <article key={item.id} className="flex flex-col justify-between gap-4 border border-gray-200 bg-white p-4 sm:flex-row sm:items-center"><div><h3 className="font-bold text-gray-950">{cliente?.nome ?? "Cliente"} · {item.descricao || "Cobrança"}</h3><p className="text-sm text-gray-500">Arquivada em {new Date(item.deleted_at).toLocaleDateString("pt-BR")} · {item.parcelas?.length ?? 0} parcelas</p></div><RestaurarCobrancaButton emprestimoId={item.id} /></article>; })}
+            {arquivadas.length === 0 ? <div className="border border-gray-200 bg-white p-6 text-sm text-gray-600">A lixeira está vazia.</div> : arquivadas.map((item) => { const cliente = Array.isArray(item.clientes) ? item.clientes[0] : item.clientes; return <article key={item.id} className="flex flex-col justify-between gap-4 border border-gray-200 bg-white p-4 sm:flex-row sm:items-center"><div><h3 className="font-bold text-gray-950">{cliente?.nome ?? "Cliente"} · {item.descricao || "Cobrança"}</h3><p className="text-sm text-gray-500">Arquivada em {new Date(item.deleted_at).toLocaleDateString("pt-BR")} · {item.parcelas?.length ?? 0} parcelas</p></div>{canWrite ? <RestaurarCobrancaButton emprestimoId={item.id} /> : null}</article>; })}
           </section>
         ) : null}
 
@@ -1257,6 +1273,7 @@ export default async function Home({ searchParams }: PageProps) {
           clientes={visibleClientes}
           hoje={hoje}
           hojeStr={hojeStr}
+          canWrite={canWrite}
         /> : null}
         </div>
       </div>
