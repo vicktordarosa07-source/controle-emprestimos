@@ -58,14 +58,17 @@ export function SubscriptionPanel() {
         <>
           <p className="mt-1 text-sm text-gray-700">Status: <strong>{sub?.status ?? "período de avaliação"}</strong>{expires ? ` • até ${new Date(expires).toLocaleDateString("pt-BR")}` : ""}</p>
           <p className="mt-1 text-xs text-gray-600">Trial de 14 dias. Acesso não é bloqueado automaticamente; limites e bloqueio permanecem desativados até configurar e testar a política comercial.</p>
+          {!state.billingConfigured ? <p role="status" className="mt-2 border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">Assinaturas indisponíveis: falta configurar a chave da plataforma e o token do webhook Asaas na Vercel. Nenhum pagamento será criado até concluir essa configuração.</p> : null}
+          {state.environment === "production" && !state.liveBillingEnabled ? <p role="status" className="mt-2 border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">Cobranças reais estão bloqueadas até os testes no Sandbox serem concluídos.</p> : null}
           {sub?.asaas_subscription_id && sub.status !== "canceled" ? <button type="button" disabled={pending} onClick={cancelSubscription} className="mt-2 min-h-9 border border-red-300 px-3 text-sm font-bold text-red-800 disabled:opacity-50">Cancelar assinatura</button> : null}
-          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          <div className="mt-3 grid max-w-xl gap-3">
             {state.plans.map((plan) => (
               <form key={plan.key} action={subscribe} className="space-y-2 border border-gray-200 p-3">
                 <input type="hidden" name="plan_key" value={plan.key} />
                 <p className="font-bold text-gray-950">{plan.name}</p>
                 <p className="text-sm text-gray-600">{plan.price === null ? "Preço ainda não configurado" : `${plan.price.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })} / mês`}</p>
-                <button disabled={pending || plan.price === null || Boolean(sub?.asaas_subscription_id && sub.status !== "canceled")} className="min-h-10 bg-blue-700 px-4 text-sm font-bold text-white disabled:opacity-50">{pending ? "Processando…" : sub?.asaas_subscription_id ? "Assinatura em andamento" : "Assinar"}</button>
+                <p className="text-xs text-gray-500">Um plano simples para começar. Cancele quando quiser.</p>
+                <button disabled={pending || !state.billingConfigured || plan.price === null || Boolean(sub?.asaas_subscription_id && sub.status !== "canceled")} className="min-h-10 bg-blue-700 px-4 text-sm font-bold text-white disabled:opacity-50">{pending ? "Processando…" : sub?.asaas_subscription_id ? "Assinatura em andamento" : "Assinar"}</button>
               </form>
             ))}
           </div>

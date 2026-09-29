@@ -42,7 +42,7 @@ Os resumos diários são opt-in. Para envio, configure `RESEND_API_KEY`, `RESEND
 
 MFA TOTP é opcional e usa Supabase Auth. A tela e as actions exigem o segundo fator para usuários que o cadastraram. Para uma política de MFA obrigatória também nas chamadas diretas ao Supabase, ajuste as políticas RLS/AAL do projeto antes de habilitar essa exigência globalmente.
 
-O app oferece a criação de assinatura mensal para o Recebify, mas preços precisam ser definidos nas variáveis `SAAS_STARTER_MONTHLY_BRL` e `SAAS_PRO_MONTHLY_BRL`. Use `ASAAS_PLATFORM_API_KEY` e `ASAAS_PLATFORM_ENV=sandbox` para validar. Webhook de assinatura requer o endpoint `/api/webhooks/asaas-plataforma` e um segredo aleatório de pelo menos 32 caracteres em `ASAAS_PLATFORM_WEBHOOK_TOKEN`. `ASAAS_PLATFORM_LIVE_BILLING_ENABLED` deve ficar `false` até validar Sandbox e decidir os valores. Limites de uso e bloqueio por inadimplência permanecem desativados: não suspendem os dados ou a conta.
+O app oferece um plano mensal inicial de R$ 29,90 (`SAAS_STARTER_MONTHLY_BRL`). Configure `ASAAS_PLATFORM_API_KEY` e mantenha `ASAAS_PLATFORM_ENV=sandbox` para validar. O webhook da plataforma usa `/api/webhooks/asaas-plataforma` e um segredo aleatório de pelo menos 32 caracteres em `ASAAS_PLATFORM_WEBHOOK_TOKEN`. `ASAAS_PLATFORM_LIVE_BILLING_ENABLED` deve permanecer `false` até validar o Sandbox e configurar o webhook. A cobrança real permanece bloqueada por padrão. Limites de uso e bloqueio por inadimplência ainda não estão ativos; valide essa política antes de vender o serviço.
 
 ## Comandos
 

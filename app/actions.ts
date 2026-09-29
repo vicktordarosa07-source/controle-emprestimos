@@ -412,15 +412,14 @@ export async function obterStatusAsaas() {
 }
 
 const PLAN_CONFIG = {
-  starter: { name: "Essencial", monthlyPrice: process.env.SAAS_STARTER_MONTHLY_BRL },
-  pro: { name: "Pro", monthlyPrice: process.env.SAAS_PRO_MONTHLY_BRL },
+  starter: { name: "Recebify Essencial", monthlyPrice: process.env.SAAS_STARTER_MONTHLY_BRL },
 } as const;
 
 export async function obterAssinaturaSaaS() {
   const { user } = await requireUser();
   const admin = createSupabaseAdminClient();
   let { data, error } = await admin.from("saas_subscriptions").select("plan_key,status,trial_ends_at,period_ends_at,asaas_subscription_id").eq("user_id", user.id).maybeSingle();
-  if (error) return { configured: false, environment: "sandbox", subscription: null, plans: [] };
+  if (error) return { configured: false, billingConfigured: false, liveBillingEnabled: false, environment: "sandbox", subscription: null, plans: [] };
   if (!data) {
     const trialEndsAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
     const result = await admin.from("saas_subscriptions").insert({ user_id: user.id, plan_key: "trial", status: "trialing", trial_ends_at: trialEndsAt }).select("plan_key,status,trial_ends_at,period_ends_at,asaas_subscription_id").single();
@@ -429,6 +428,8 @@ export async function obterAssinaturaSaaS() {
   }
   return {
     configured: true,
+    billingConfigured: Boolean(process.env.ASAAS_PLATFORM_API_KEY && (process.env.ASAAS_PLATFORM_WEBHOOK_TOKEN?.length ?? 0) >= 32),
+    liveBillingEnabled: process.env.ASAAS_PLATFORM_LIVE_BILLING_ENABLED === "true",
     subscription: error ? null : data,
     environment: process.env.ASAAS_PLATFORM_ENV === "production" ? "production" : "sandbox",
     plans: Object.entries(PLAN_CONFIG).map(([key, plan]) => ({ key, name: plan.name, price: plan.monthlyPrice ? Number(plan.monthlyPrice) : null })),
@@ -438,7 +439,7 @@ export async function obterAssinaturaSaaS() {
 export async function assinarPlanoFluxo(formData: FormData, confirmarProducao = false) {
   const { user } = await requireUser();
   const planKey = String(formData.get("plan_key") ?? "");
-  if (planKey !== "starter" && planKey !== "pro") throw new Error("Plano inválido.");
+  if (planKey !== "starter") throw new Error("Plano inválido.");
   const priceRaw = PLAN_CONFIG[planKey].monthlyPrice;
   const price = Number(priceRaw);
   if (!priceRaw || !Number.isFinite(price) || price <= 0) throw new Error("O preço deste plano ainda não foi configurado pelo administrador do SaaS.");
