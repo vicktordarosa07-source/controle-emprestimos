@@ -1,6 +1,6 @@
 "use server";
 
-import { createHash, randomBytes } from "node:crypto";
+import { randomBytes } from "node:crypto";
 import type { UserAttributes } from "@supabase/supabase-js";
 import {
   buildParcelas,
@@ -19,10 +19,16 @@ import {
 } from "@/lib/loan-utils";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { revalidatePath } from "next/cache";
-import { encryptAsaasCredential, decryptAsaasCredential } from "@/lib/asaas-crypto";
+import { decryptAsaasCredential } from "@/lib/asaas-crypto";
 import { createSupabaseAdminClient } from "@/lib/supabase-admin";
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://recebify.vercel.app";
+
+function asaasApiUrl(environment: "sandbox" | "production") {
+  return environment === "sandbox"
+    ? "https://api-sandbox.asaas.com/v3"
+    : "https://api.asaas.com/v3";
+}
 
 async function requireUser() {
   const supabase = await createSupabaseServerClient();
@@ -128,7 +134,7 @@ export async function marcarComoPago(parcelaId: string) {
     .in("status", ["PENDING", "OVERDUE", "CONFIRMED"])
     .limit(1);
   if (chargesError) throw new Error(`Erro ao verificar cobrança externa: ${chargesError.message}`);
-  if (linkedCharges?.length) throw new Error("Esta parcela tem um link Asaas ativo. Cancele-o no Asaas antes de registrar pagamento manual, para evitar cobrança duplicada.");
+  if (linkedCharges?.length) throw new Error("Esta parcela tem um link de pagamento ativo. Cancele-o no meio de pagamento antes de registrar manualmente, para evitar cobrança duplicada.");
   const { error } = await supabase.rpc("registrar_pagamento_parcela", {
     p_parcela_id: parcelaId,
   });
@@ -172,7 +178,7 @@ export async function registrarPagamentoCliente(formData: FormData) {
       .in("status", ["PENDING", "OVERDUE", "CONFIRMED"])
       .limit(1);
     if (chargesError) throw new Error(`Erro ao verificar cobrança externa: ${chargesError.message}`);
-    if (linkedCharges?.length) throw new Error("Este cliente tem link Asaas ativo. Cancele-o no Asaas antes de registrar recebimento manual.");
+    if (linkedCharges?.length) throw new Error("Este cliente tem um link de pagamento ativo. Cancele-o no meio de pagamento antes de registrar recebimento manual.");
   }
   const { error } = await supabase.rpc("registrar_pagamento_cliente", {
     p_cliente_id: clienteId,
@@ -353,65 +359,6 @@ export async function restaurarBackup(formData: FormData) {
   return data as Record<string, number>;
 }
 
-function asaasApiUrl(environment: "sandbox" | "production") {
-  return environment === "sandbox"
-    ? "https://api-sandbox.asaas.com/v3"
-    : "https://api.asaas.com/v3";
-}
-
-export async function conectarAsaas(formData: FormData) {
-  const { user } = await requireUser();
-  const credential = String(formData.get("asaas_api_key") ?? "").trim();
-  const environment = formData.get("asaas_environment") === "production" ? "production" : "sandbox";
-  if (credential.length < 16 || credential.length > 512) throw new Error("Chave Asaas inválida.");
-
-  const admin = createSupabaseAdminClient();
-  const { data: previousConnection } = await admin.from("asaas_connections").select("user_id").eq("user_id", user.id).maybeSingle();
-  if (previousConnection) {
-    const { count, error: pendingError } = await admin.from("asaas_charges").select("id", { count: "exact", head: true })
-      .eq("user_id", user.id).in("status", ["PENDING", "OVERDUE", "CONFIRMED"]);
-    if (pendingError) throw new Error("Não foi possível verificar cobranças pendentes da conexão anterior.");
-    if ((count ?? 0) > 0) throw new Error("Cancele ou aguarde as cobranças Asaas pendentes antes de trocar a chave, para não perder a conciliação do webhook.");
-  }
-
-  const url = asaasApiUrl(environment);
-  const validation = await fetch(`${url}/customers?limit=1`, {
-    headers: { access_token: credential, accept: "application/json", "User-Agent": "Recebify/1.0" },
-    cache: "no-store",
-  });
-  if (!validation.ok) throw new Error("O Asaas rejeitou a chave ou o ambiente selecionado. Confira no próprio painel Asaas.");
-
-  const webhookToken = randomBytes(32).toString("hex");
-  const encrypted = encryptAsaasCredential(credential);
-  const { error } = await admin.from("asaas_connections").upsert({
-    user_id: user.id,
-    environment,
-    ...encrypted,
-    webhook_token_hash: createHash("sha256").update(webhookToken).digest("hex"),
-    updated_at: new Date().toISOString(),
-  });
-  if (error) throw new Error("Não foi possível guardar a conexão Asaas com segurança.");
-
-  revalidatePath("/");
-  return {
-    environment,
-    webhookToken,
-    webhookUrl: `${SITE_URL}/api/webhooks/asaas`,
-  };
-}
-
-export async function obterStatusAsaas() {
-  const { user } = await requireUser();
-  try {
-    const admin = createSupabaseAdminClient();
-    const { data, error } = await admin.from("asaas_connections").select("environment").eq("user_id", user.id).maybeSingle();
-    if (error) return { connected: false, environment: null as string | null };
-    return { connected: Boolean(data), environment: data?.environment ?? null };
-  } catch {
-    return { connected: false, environment: null as string | null };
-  }
-}
-
 const PLAN_CONFIG = {
   starter: { name: "Recebify Essencial", monthlyPrice: process.env.SAAS_STARTER_MONTHLY_BRL },
 } as const;
@@ -468,7 +415,7 @@ export async function assinarPlanoFluxo(formData: FormData, confirmarProducao = 
   customerLookup.searchParams.set("externalReference", user.id);
   customerLookup.searchParams.set("limit", "1");
   const lookupResponse = await fetch(customerLookup, { headers, cache: "no-store" });
-  if (!lookupResponse.ok) throw new Error("Não foi possível consultar clientes da conta Asaas da plataforma.");
+  if (!lookupResponse.ok) throw new Error("Não foi possível preparar a assinatura. Tente novamente ou fale com o suporte.");
   const lookup = await lookupResponse.json() as { data?: { id: string; cpfCnpj?: string | null }[] };
   let customerId = lookup.data?.[0]?.id;
   if (!customerId) {
@@ -484,8 +431,7 @@ export async function assinarPlanoFluxo(formData: FormData, confirmarProducao = 
     const customerResponse = await fetch(`${base}/customers/${encodeURIComponent(customerId)}`, {
       method: "PUT", headers, body: JSON.stringify({ cpfCnpj }), cache: "no-store",
     });
-    const customer = await customerResponse.json() as { errors?: { description?: string }[] };
-    if (!customerResponse.ok) throw new Error(customer.errors?.[0]?.description ?? "Não foi possível atualizar o CPF/CNPJ no Asaas.");
+    if (!customerResponse.ok) throw new Error("Não foi possível atualizar o CPF/CNPJ. Confira os dados e tente novamente.");
   }
 
   const due = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
@@ -498,7 +444,7 @@ export async function assinarPlanoFluxo(formData: FormData, confirmarProducao = 
   subscriptionsUrl.searchParams.set("externalReference", user.id);
   subscriptionsUrl.searchParams.set("limit", "10");
   const subscriptionsResponse = await fetch(subscriptionsUrl, { headers, cache: "no-store" });
-  if (!subscriptionsResponse.ok) throw new Error("Não foi possível verificar assinaturas anteriores no Asaas.");
+  if (!subscriptionsResponse.ok) throw new Error("Não foi possível verificar sua assinatura. Tente novamente ou fale com o suporte.");
   const subscriptions = await subscriptionsResponse.json() as { data?: { id: string; status?: string }[] };
   let providerSubscriptionId = subscriptions.data?.find((item) => item.status !== "INACTIVE")?.id;
   if (!providerSubscriptionId) {
@@ -512,7 +458,7 @@ export async function assinarPlanoFluxo(formData: FormData, confirmarProducao = 
       cache: "no-store",
     });
     const providerSubscription = await subscriptionResponse.json() as { id?: string; errors?: { description?: string }[] };
-    if (!subscriptionResponse.ok || !providerSubscription.id) throw new Error(providerSubscription.errors?.[0]?.description ?? "Falha ao agendar a assinatura no Asaas.");
+    if (!subscriptionResponse.ok || !providerSubscription.id) throw new Error("Não foi possível iniciar sua assinatura. Tente novamente ou fale com o suporte.");
     providerSubscriptionId = providerSubscription.id;
   }
   const { error } = await admin.from("saas_subscriptions").upsert({
@@ -520,7 +466,7 @@ export async function assinarPlanoFluxo(formData: FormData, confirmarProducao = 
     asaas_customer_id: customerId, asaas_subscription_id: providerSubscriptionId,
     asaas_environment: environment, updated_at: new Date().toISOString(),
   });
-  if (error) throw new Error("Assinatura criada no Asaas, mas não foi possível salvar no Recebify. Contate o suporte antes de repetir.");
+  if (error) throw new Error("Não foi possível concluir sua assinatura. Fale com o suporte antes de tentar novamente.");
   revalidatePath("/");
   return { ok: true as const, plan: PLAN_CONFIG[planKey].name, nextDueDate, environment };
   } catch (reason) {
@@ -542,21 +488,9 @@ export async function cancelarAssinaturaFluxo() {
   const response = await fetch(`${base}/subscriptions/${encodeURIComponent(subscription.asaas_subscription_id)}`, {
     method: "DELETE", headers: { access_token: apiKey, "User-Agent": "Recebify/1.0" }, cache: "no-store",
   });
-  if (!response.ok) throw new Error("O Asaas não confirmou o cancelamento. Verifique a assinatura no painel Asaas antes de tentar novamente.");
+  if (!response.ok) throw new Error("Não foi possível confirmar o cancelamento. Verifique o status da assinatura ou fale com o suporte.");
   const { error } = await admin.from("saas_subscriptions").update({ status: "canceled", updated_at: new Date().toISOString() }).eq("user_id", user.id);
-  if (error) throw new Error("Cancelamento recebido pelo Asaas, mas não foi possível atualizar o status local.");
-  revalidatePath("/");
-}
-
-export async function desconectarAsaas() {
-  const { user } = await requireUser();
-  const admin = createSupabaseAdminClient();
-  const { count, error: pendingError } = await admin.from("asaas_charges").select("id", { count: "exact", head: true })
-    .eq("user_id", user.id).in("status", ["PENDING", "OVERDUE", "CONFIRMED"]);
-  if (pendingError) throw new Error("Não foi possível verificar cobranças pendentes.");
-  if ((count ?? 0) > 0) throw new Error("Cancele ou aguarde as cobranças Asaas pendentes antes de remover a conexão.");
-  const { error } = await admin.from("asaas_connections").delete().eq("user_id", user.id);
-  if (error) throw new Error("Não foi possível remover a conexão Asaas.");
+  if (error) throw new Error("O pedido de cancelamento foi recebido, mas não foi possível atualizar o status. Fale com o suporte.");
   revalidatePath("/");
 }
 

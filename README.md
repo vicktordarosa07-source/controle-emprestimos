@@ -15,7 +15,7 @@ Aplicação privada para organizar clientes, cobranças parceladas ou recorrente
 - Fila de lembretes para parcelas vencidas, do dia e dos próximos 7 dias, com registro manual de contatos; resumo diário por e-mail opcional ao dono da conta.
 - Resumo financeiro mensal, comparação com o mês anterior e histórico de rateio dos pagamentos.
 - Arquivamento recuperável de cobranças pela Lixeira; exportação CSV compatível com Excel, backup JSON e importação transacional sem sobrescrever IDs.
-- Conexão individual com Asaas (Sandbox/Produção), link de pagamento por parcela e conciliação idempotente via webhook.
+- Registro manual de pagamentos parciais ou totais, com histórico e atualização dos saldos.
 - MFA TOTP opcional e testes automatizados das regras financeiras centrais.
 - Histórico de cobranças já existentes continua usando as regras registradas anteriormente.
 
@@ -36,7 +36,7 @@ Ative Email/Password e a opção de cadastro de novos usuários em Authenticatio
 
 ## Asaas, e-mail, cron e segurança
 
-Cada usuário conecta sua própria chave Asaas; não use a conta central do SaaS para movimentar os recebíveis dos clientes. A chave é criptografada com AES-256-GCM no backend. Configure `SUPABASE_SERVICE_ROLE_KEY` e `ASAAS_CREDENTIAL_ENCRYPTION_KEY` na Vercel (32 bytes em hexadecimal). Comece no Sandbox. A escolha de Produção exige confirmação adicional antes de gerar uma cobrança real. O webhook deve ser cadastrado manualmente no painel Asaas com a URL e o token mostrados uma única vez ao conectar; eventos duplicados são deduplicados, e somente `PAYMENT_RECEIVED` lança recebimento no livro-caixa. Teste primeiro com dados e chaves Sandbox.
+Clientes não conectam provedores de pagamento nem precisam criar chaves. O Recebify usa uma integração privada da plataforma para processar as próprias assinaturas. O endpoint de webhook de cobranças individuais permanece ativo apenas para conciliar links que já tenham sido emitidos anteriormente; não há mais controles para criar novos links no app.
 
 Os resumos diários são opt-in. Para envio, configure `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, `SUPABASE_SERVICE_ROLE_KEY` e `CRON_SECRET` na Vercel. O cron de `vercel.json` roda diariamente às 12:00 UTC (09:00 em Brasília, fora de mudanças de horário sazonal). O domínio do remetente deve estar validado no Resend.
 

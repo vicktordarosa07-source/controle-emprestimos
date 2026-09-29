@@ -9,7 +9,6 @@ import { RegistrarPagamentoForm } from "./components/RegistrarPagamentoForm";
 import { ContatoCobrancaForm } from "./components/ContatoCobrancaForm";
 import { ArquivarCobrancaButton } from "./components/ArquivarCobrancaButton";
 import { RestaurarCobrancaButton } from "./components/RestaurarCobrancaButton";
-import { AsaasChargeButton } from "./components/AsaasChargeButton";
 import { aprovarUsuario, atualizarCliente } from "./actions";
 
 const AccountSettingsPanel = nextDynamic(
@@ -20,15 +19,11 @@ const MfaPanel = nextDynamic(
   () => import("./components/MfaPanel").then((module) => module.MfaPanel),
   { loading: () => <p role="status" className="text-sm text-gray-500">Carregando verificação…</p> },
 );
-const AsaasSettingsPanel = nextDynamic(
-  () => import("./components/AsaasSettingsPanel").then((module) => module.AsaasSettingsPanel),
-  { loading: () => <div role="status" className="rounded-2xl border border-slate-200 bg-white p-6 text-sm text-slate-500">Carregando integração…</div> },
-);
 
 export const dynamic = "force-dynamic";
 
 type ParcelaStatus = "Pendente" | "Pago" | string;
-type ViewFilter = "abertas" | "atrasadas" | "pagas" | "todas" | "lembretes" | "financeiro" | "historico" | "lixeira" | "integracoes" | "configuracoes";
+type ViewFilter = "abertas" | "atrasadas" | "pagas" | "todas" | "lembretes" | "financeiro" | "historico" | "lixeira" | "configuracoes";
 
 type ParcelaComCliente = {
   id: string;
@@ -120,7 +115,6 @@ const viewLabels: Record<ViewFilter, string> = {
   financeiro: "Financeiro",
   historico: "Histórico de pagamentos",
   lixeira: "Lixeira",
-  integracoes: "Integrações",
   configuracoes: "Configurações",
 };
 
@@ -307,7 +301,7 @@ function agruparPorCliente({
 }
 
 function normalizeView(value: string | undefined): ViewFilter {
-  if (value === "atrasadas" || value === "pagas" || value === "todas" || value === "lembretes" || value === "financeiro" || value === "historico" || value === "lixeira" || value === "integracoes" || value === "configuracoes") {
+  if (value === "atrasadas" || value === "pagas" || value === "todas" || value === "lembretes" || value === "financeiro" || value === "historico" || value === "lixeira" || value === "configuracoes") {
     return value;
   }
 
@@ -578,7 +572,6 @@ function ParcelaCard({
       </div>
 
       <MarcarPagoButton parcelaId={parcela.id} status={parcela.status} />
-      {!isPaga ? <AsaasChargeButton parcelaId={parcela.id} /> : null}
     </article>
   );
 }
@@ -664,7 +657,6 @@ function ParcelasDoCliente({
                   </td>
                   <td className="px-4 py-3">
                     <MarcarPagoButton parcelaId={parcela.id} status={parcela.status} />
-                    {!isPaga ? <AsaasChargeButton parcelaId={parcela.id} /> : null}
                   </td>
                 </tr>
               );
@@ -999,7 +991,7 @@ export default async function Home({ searchParams }: PageProps) {
       pendingUsers = (profiles as UserProfile[] | null) ?? [];
     }
 
-    if (activeView !== "configuracoes" && activeView !== "integracoes") {
+    if (activeView !== "configuracoes") {
       const needsPayments = activeView === "financeiro" || activeView === "historico";
       const needsContacts = activeView === "lembretes";
       const needsArchivedRows = activeView === "lixeira";
@@ -1103,7 +1095,7 @@ export default async function Home({ searchParams }: PageProps) {
               Recebify • Gestão de cobranças
             </h1>
             <p className="text-sm font-medium text-gray-500">
-              {activeView === "configuracoes" || activeView === "integracoes" ? userEmail : `${userEmail} • ${abertas.length} em aberto • ${atrasadas.length} atrasada(s)`}
+              {activeView === "configuracoes" ? userEmail : `${userEmail} • ${abertas.length} em aberto • ${atrasadas.length} atrasada(s)`}
             </p>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row">
@@ -1120,7 +1112,7 @@ export default async function Home({ searchParams }: PageProps) {
           </div>
         ) : null}
 
-        {activeView !== "configuracoes" && activeView !== "integracoes" ? <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {activeView !== "configuracoes" ? <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <SummaryCard
             label="Total a receber"
             value={formatCurrency(sumSaldoRestante(abertas, hoje))}
@@ -1144,7 +1136,7 @@ export default async function Home({ searchParams }: PageProps) {
         </section> : null}
 
         <nav aria-label="Áreas do sistema" className="flex flex-wrap gap-2 border border-gray-200 bg-white p-3">
-          {(["abertas", "lembretes", "financeiro", "historico", "lixeira", "integracoes", "configuracoes"] as ViewFilter[]).map((view) => (
+          {(["abertas", "lembretes", "financeiro", "historico", "lixeira", "configuracoes"] as ViewFilter[]).map((view) => (
             <a key={view} href={buildHref({ view, q, mes: view === "financeiro" ? mesSelecionado : undefined })}
               aria-current={activeView === view ? "page" : undefined}
               className={`min-h-10 px-4 py-2 text-sm font-bold ${activeView === view ? "bg-blue-700 text-white" : "border border-gray-300 text-gray-700 hover:bg-gray-50"}`}>
@@ -1152,30 +1144,12 @@ export default async function Home({ searchParams }: PageProps) {
               {view === "lembretes" && activeView !== "configuracoes" ? ` (${lembretes.length})` : view === "lixeira" && activeView !== "configuracoes" ? ` (${arquivadasCount})` : ""}
             </a>
           ))}
-          {activeView !== "configuracoes" && activeView !== "integracoes" ? <>
+          {activeView !== "configuracoes" ? <>
             <a href="/api/export" className="min-h-10 border border-gray-300 px-4 py-2 text-sm font-bold text-gray-700 hover:bg-gray-50">Exportar cobranças CSV</a>
             <a href="/api/export?tipo=pagamentos" className="min-h-10 border border-gray-300 px-4 py-2 text-sm font-bold text-gray-700 hover:bg-gray-50">Exportar pagamentos CSV</a>
             <a href="/api/export?formato=json" className="min-h-10 border border-gray-300 px-4 py-2 text-sm font-bold text-gray-700 hover:bg-gray-50">Baixar backup JSON</a>
           </> : null}
         </nav>
-
-        {activeView === "integracoes" ? (
-          <section className="mx-auto w-full max-w-5xl space-y-6" aria-labelledby="integrations-title">
-            <header className="overflow-hidden rounded-2xl border border-slate-200 bg-gradient-to-br from-white via-white to-blue-50 p-6 shadow-sm sm:p-8">
-              <div className="flex items-start gap-4">
-                <div aria-hidden="true" className="grid size-12 shrink-0 place-items-center rounded-xl bg-blue-100 text-blue-700">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="size-6"><path strokeLinecap="round" strokeLinejoin="round" d="M10 13a5 5 0 0 0 7.07 0l3-3A5 5 0 0 0 13 2.93l-1.72 1.72M14 11a5 5 0 0 0-7.07 0l-3 3A5 5 0 0 0 11 21.07l1.72-1.72" /></svg>
-                </div>
-                <div>
-                  <p className="text-sm font-semibold text-blue-700">Conecte suas ferramentas</p>
-                  <h2 id="integrations-title" className="mt-1 text-2xl font-bold tracking-tight text-slate-950">Integrações</h2>
-                  <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">Ligue o Recebify ao Asaas para emitir cobranças e acompanhar pagamentos sem sair da sua rotina.</p>
-                </div>
-              </div>
-            </header>
-            <AsaasSettingsPanel />
-          </section>
-        ) : null}
 
         {activeView === "configuracoes" ? (
           <section className="space-y-5" aria-labelledby="settings-title">
