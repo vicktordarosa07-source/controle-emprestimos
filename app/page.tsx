@@ -1020,11 +1020,19 @@ export default async function Home({ searchParams }: PageProps) {
     hoje,
     hojeStr,
   });
+  const primaryNavigation: { view: ViewFilter; label: string; count?: number }[] = [
+    { view: "abertas", label: "Em aberto" },
+    { view: "lembretes", label: "Lembretes", count: lembretes.length },
+    { view: "financeiro", label: "Financeiro" },
+    { view: "historico", label: "Histórico de pagamentos" },
+    { view: "lixeira", label: "Lixeira", count: arquivadasCount },
+    { view: "configuracoes", label: "Configurações" },
+  ];
 
   return (
     <main className="min-h-screen bg-gray-50">
       <header className="sticky top-0 z-40 border-b border-gray-200 bg-white">
-        <div className="mx-auto flex max-w-6xl flex-col gap-4 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-xl font-bold text-gray-950 sm:text-2xl">
               Recebify • Gestão de cobranças
@@ -1040,7 +1048,48 @@ export default async function Home({ searchParams }: PageProps) {
         </div>
       </header>
 
-      <div className="mx-auto max-w-6xl space-y-6 px-4 py-6">
+      <div className="mx-auto flex max-w-7xl items-start gap-6 px-4 py-6">
+        <aside className="sticky top-24 hidden w-60 shrink-0 md:block" aria-label="Menu lateral">
+          <nav aria-label="Áreas do sistema" className="border border-gray-200 bg-white p-3 shadow-sm">
+            <p className="mb-3 px-3 text-xs font-bold uppercase tracking-wide text-gray-500">Menu</p>
+            <div className="space-y-1">
+              {primaryNavigation.map(({ view, label, count }) => (
+                <a key={view} href={buildHref({ view, q, mes: view === "financeiro" ? mesSelecionado : undefined })}
+                  aria-current={activeView === view ? "page" : undefined}
+                  className={`flex min-h-11 items-center justify-between border-l-4 px-3 py-2 text-sm font-semibold transition-colors ${activeView === view ? "border-blue-700 bg-blue-50 text-blue-800" : "border-transparent text-gray-700 hover:bg-gray-50 hover:text-gray-950"}`}>
+                  <span>{label}</span>
+                  {count !== undefined ? <span className={`ml-2 rounded-full px-2 py-0.5 text-xs ${activeView === view ? "bg-blue-100 text-blue-800" : "bg-gray-100 text-gray-600"}`}>{count}</span> : null}
+                </a>
+              ))}
+            </div>
+            {activeView !== "configuracoes" ? <div className="mt-4 space-y-1 border-t border-gray-200 pt-3">
+              <p className="mb-2 px-3 text-xs font-bold uppercase tracking-wide text-gray-500">Exportar e backup</p>
+              <a href="/api/export" className="flex min-h-10 items-center px-3 text-sm font-medium text-gray-600 hover:bg-gray-50 hover:text-gray-950">Cobranças CSV</a>
+              <a href="/api/export?tipo=pagamentos" className="flex min-h-10 items-center px-3 text-sm font-medium text-gray-600 hover:bg-gray-50 hover:text-gray-950">Pagamentos CSV</a>
+              <a href="/api/export?formato=json" className="flex min-h-10 items-center px-3 text-sm font-medium text-gray-600 hover:bg-gray-50 hover:text-gray-950">Backup JSON</a>
+            </div> : null}
+          </nav>
+        </aside>
+
+        <div className="min-w-0 flex-1 space-y-6">
+          <nav aria-label="Áreas do sistema" className="flex gap-2 overflow-x-auto border border-gray-200 bg-white p-2 md:hidden">
+            {primaryNavigation.map(({ view, label, count }) => (
+              <a key={view} href={buildHref({ view, q, mes: view === "financeiro" ? mesSelecionado : undefined })}
+                aria-current={activeView === view ? "page" : undefined}
+                className={`min-h-10 shrink-0 px-3 py-2 text-sm font-bold ${activeView === view ? "bg-blue-700 text-white" : "border border-gray-300 text-gray-700 hover:bg-gray-50"}`}>
+                {label}{count !== undefined ? ` (${count})` : ""}
+              </a>
+            ))}
+          </nav>
+          {activeView !== "configuracoes" ? <details className="border border-gray-200 bg-white p-3 text-sm md:hidden">
+            <summary className="cursor-pointer font-semibold text-gray-700">Exportar e backup</summary>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <a href="/api/export" className="border border-gray-300 px-3 py-2 font-medium text-gray-700">Cobranças CSV</a>
+              <a href="/api/export?tipo=pagamentos" className="border border-gray-300 px-3 py-2 font-medium text-gray-700">Pagamentos CSV</a>
+              <a href="/api/export?formato=json" className="border border-gray-300 px-3 py-2 font-medium text-gray-700">Backup JSON</a>
+            </div>
+          </details> : null}
+
         {fetchError ? (
           <div className="border border-red-200 bg-red-50 p-4 text-sm font-medium text-red-700">
             Erro ao carregar dados: {fetchError}
@@ -1069,22 +1118,6 @@ export default async function Home({ searchParams }: PageProps) {
             tone="gray"
           />
         </section> : null}
-
-        <nav aria-label="Áreas do sistema" className="flex flex-wrap gap-2 border border-gray-200 bg-white p-3">
-          {(["abertas", "lembretes", "financeiro", "historico", "lixeira", "configuracoes"] as ViewFilter[]).map((view) => (
-            <a key={view} href={buildHref({ view, q, mes: view === "financeiro" ? mesSelecionado : undefined })}
-              aria-current={activeView === view ? "page" : undefined}
-              className={`min-h-10 px-4 py-2 text-sm font-bold ${activeView === view ? "bg-blue-700 text-white" : "border border-gray-300 text-gray-700 hover:bg-gray-50"}`}>
-              {viewLabels[view]}
-              {view === "lembretes" && activeView !== "configuracoes" ? ` (${lembretes.length})` : view === "lixeira" && activeView !== "configuracoes" ? ` (${arquivadasCount})` : ""}
-            </a>
-          ))}
-          {activeView !== "configuracoes" ? <>
-            <a href="/api/export" className="min-h-10 border border-gray-300 px-4 py-2 text-sm font-bold text-gray-700 hover:bg-gray-50">Exportar cobranças CSV</a>
-            <a href="/api/export?tipo=pagamentos" className="min-h-10 border border-gray-300 px-4 py-2 text-sm font-bold text-gray-700 hover:bg-gray-50">Exportar pagamentos CSV</a>
-            <a href="/api/export?formato=json" className="min-h-10 border border-gray-300 px-4 py-2 text-sm font-bold text-gray-700 hover:bg-gray-50">Baixar backup JSON</a>
-          </> : null}
-        </nav>
 
         {activeView === "configuracoes" ? (
           <section className="space-y-5" aria-labelledby="settings-title">
@@ -1209,6 +1242,7 @@ export default async function Home({ searchParams }: PageProps) {
           hoje={hoje}
           hojeStr={hojeStr}
         /> : null}
+        </div>
       </div>
     </main>
   );
