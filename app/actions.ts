@@ -646,18 +646,3 @@ export async function criarLinkAsaas(parcelaId: string, confirmarCobrancaReal = 
   revalidatePath("/");
   return payment.invoiceUrl;
 }
-
-export async function aprovarUsuario(formData: FormData) {
-  const { supabase } = await requireUser();
-  const userId = parseRequiredText(formData.get("user_id"), "Usuario");
-
-  const { error } = await supabase.rpc("approve_user_access", {
-    p_user_id: userId,
-  });
-
-  if (error) {
-    throw new Error(`Erro ao aprovar usuario: ${error.message}`);
-  }
-
-  revalidatePath("/");
-}
