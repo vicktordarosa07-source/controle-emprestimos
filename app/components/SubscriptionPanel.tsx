@@ -23,7 +23,7 @@ export function SubscriptionPanel() {
     startTransition(async () => {
       try {
         const live = state?.environment === "production";
-        if (live && !window.confirm("Isto criará uma assinatura real do Fluxo e poderá gerar cobranças recorrentes. Continuar?")) return;
+        if (live && !window.confirm("Isto criará uma assinatura real do Recebify e poderá gerar cobranças recorrentes. Continuar?")) return;
         const result = await assinarPlanoFluxo(formData, live);
         setMessage(`Plano ${result.plan} agendado para ${new Date(`${result.nextDueDate}T12:00:00`).toLocaleDateString("pt-BR")} (${result.environment}). A confirmação de pagamento depende do webhook do Asaas.`);
         const updated = await obterAssinaturaSaaS();
@@ -33,7 +33,7 @@ export function SubscriptionPanel() {
   }
 
   function cancelSubscription() {
-    if (!window.confirm("Cancelar a recorrência do Fluxo no Asaas? Cobranças futuras serão interrompidas; pagamentos já recebidos não são estornados.")) return;
+    if (!window.confirm("Cancelar a recorrência do Recebify no Asaas? Cobranças futuras serão interrompidas; pagamentos já recebidos não são estornados.")) return;
     setError("");
     setMessage("");
     startTransition(async () => {
@@ -51,7 +51,7 @@ export function SubscriptionPanel() {
 
   return (
     <section className="border-t border-gray-200 p-4">
-      <h3 className="font-bold text-gray-950">Plano e assinatura do Fluxo</h3>
+      <h3 className="font-bold text-gray-950">Plano e assinatura do Recebify</h3>
       {!state.configured ? (
         <p className="mt-2 text-sm text-amber-800">A migração de assinatura ainda não foi aplicada no Supabase.</p>
       ) : (
@@ -69,7 +69,7 @@ export function SubscriptionPanel() {
               </form>
             ))}
           </div>
-          <p className="mt-3 text-xs text-gray-500">Para conciliar pagamentos, configure no Asaas o webhook <code>{process.env.NEXT_PUBLIC_SITE_URL ?? "https://gestao-de-emprestimo.vercel.app"}/api/webhooks/asaas-plataforma</code> com o token guardado em <code>ASAAS_PLATFORM_WEBHOOK_TOKEN</code> na Vercel.</p>
+          <p className="mt-3 text-xs text-gray-500">Para conciliar pagamentos, configure no Asaas o webhook <code>{process.env.NEXT_PUBLIC_SITE_URL ?? "https://recebify.vercel.app"}/api/webhooks/asaas-plataforma</code> com o token guardado em <code>ASAAS_PLATFORM_WEBHOOK_TOKEN</code> na Vercel.</p>
         </>
       )}
       {error ? <p role="alert" className="mt-2 text-sm font-semibold text-red-700">{error}</p> : null}

@@ -21,7 +21,7 @@ import { revalidatePath } from "next/cache";
 import { encryptAsaasCredential, decryptAsaasCredential } from "@/lib/asaas-crypto";
 import { createSupabaseAdminClient } from "@/lib/supabase-admin";
 
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://gestao-de-emprestimo.vercel.app";
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://recebify.vercel.app";
 
 async function requireUser() {
   const supabase = await createSupabaseServerClient();
@@ -341,7 +341,7 @@ export async function restaurarBackup(formData: FormData) {
     throw new Error("O arquivo não contém JSON válido.");
   }
   if (!backup || typeof backup !== "object" || (backup as { formato?: unknown }).formato !== "fluxo-backup-v1") {
-    throw new Error("Este não é um backup válido do Fluxo.");
+    throw new Error("Este não é um backup válido do Recebify.");
   }
 
   const { data, error } = await supabase.rpc("restore_fluxo_backup", {
@@ -375,7 +375,7 @@ export async function conectarAsaas(formData: FormData) {
 
   const url = asaasApiUrl(environment);
   const validation = await fetch(`${url}/customers?limit=1`, {
-    headers: { access_token: credential, accept: "application/json", "User-Agent": "Fluxo/1.0" },
+    headers: { access_token: credential, accept: "application/json", "User-Agent": "Recebify/1.0" },
     cache: "no-store",
   });
   if (!validation.ok) throw new Error("O Asaas rejeitou a chave ou o ambiente selecionado. Confira no próprio painel Asaas.");
@@ -445,9 +445,9 @@ export async function assinarPlanoFluxo(formData: FormData, confirmarProducao = 
 
   const apiKey = process.env.ASAAS_PLATFORM_API_KEY;
   const environment = process.env.ASAAS_PLATFORM_ENV === "production" ? "production" : "sandbox";
-  if (!apiKey) throw new Error("A cobrança da assinatura Fluxo ainda não foi configurada.");
+  if (!apiKey) throw new Error("A cobrança da assinatura Recebify ainda não foi configurada.");
   if (environment === "production" && process.env.ASAAS_PLATFORM_LIVE_BILLING_ENABLED !== "true") {
-    throw new Error("A cobrança real do Fluxo está bloqueada até a habilitação explícita do administrador.");
+    throw new Error("A cobrança real do Recebify está bloqueada até a habilitação explícita do administrador.");
   }
   if (environment === "production" && confirmarProducao !== true) {
     throw new Error("Confirme explicitamente a criação da assinatura em produção.");
@@ -459,7 +459,7 @@ export async function assinarPlanoFluxo(formData: FormData, confirmarProducao = 
   const profile = await admin.from("profiles").select("email,fone").eq("id", user.id).maybeSingle();
   if (!profile.data?.email) throw new Error("Não há e-mail cadastrado para a conta.");
   const base = environment === "production" ? "https://api.asaas.com/v3" : "https://api-sandbox.asaas.com/v3";
-  const headers = { access_token: apiKey, "Content-Type": "application/json", "User-Agent": "Fluxo/1.0" };
+  const headers = { access_token: apiKey, "Content-Type": "application/json", "User-Agent": "Recebify/1.0" };
   const customerLookup = new URL(`${base}/customers`);
   customerLookup.searchParams.set("externalReference", user.id);
   customerLookup.searchParams.set("limit", "1");
@@ -496,7 +496,7 @@ export async function assinarPlanoFluxo(formData: FormData, confirmarProducao = 
       method: "POST", headers,
       body: JSON.stringify({
         customer: customerId, billingType: "UNDEFINED", value: price,
-        nextDueDate, cycle: "MONTHLY", description: `Fluxo ${PLAN_CONFIG[planKey].name}`,
+        nextDueDate, cycle: "MONTHLY", description: `Recebify ${PLAN_CONFIG[planKey].name}`,
         externalReference: user.id,
       }),
       cache: "no-store",
@@ -510,7 +510,7 @@ export async function assinarPlanoFluxo(formData: FormData, confirmarProducao = 
     asaas_customer_id: customerId, asaas_subscription_id: providerSubscriptionId,
     asaas_environment: environment, updated_at: new Date().toISOString(),
   });
-  if (error) throw new Error("Assinatura criada no Asaas, mas não foi possível salvar no Fluxo. Contate o suporte antes de repetir.");
+  if (error) throw new Error("Assinatura criada no Asaas, mas não foi possível salvar no Recebify. Contate o suporte antes de repetir.");
   revalidatePath("/");
   return { plan: PLAN_CONFIG[planKey].name, nextDueDate, environment };
 }
@@ -526,7 +526,7 @@ export async function cancelarAssinaturaFluxo() {
   if (!apiKey) throw new Error("A conexão de cobrança do SaaS não está disponível.");
   const base = environment === "production" ? "https://api.asaas.com/v3" : "https://api-sandbox.asaas.com/v3";
   const response = await fetch(`${base}/subscriptions/${encodeURIComponent(subscription.asaas_subscription_id)}`, {
-    method: "DELETE", headers: { access_token: apiKey, "User-Agent": "Fluxo/1.0" }, cache: "no-store",
+    method: "DELETE", headers: { access_token: apiKey, "User-Agent": "Recebify/1.0" }, cache: "no-store",
   });
   if (!response.ok) throw new Error("O Asaas não confirmou o cancelamento. Verifique a assinatura no painel Asaas antes de tentar novamente.");
   const { error } = await admin.from("saas_subscriptions").update({ status: "canceled", updated_at: new Date().toISOString() }).eq("user_id", user.id);
@@ -612,13 +612,13 @@ export async function criarLinkAsaas(parcelaId: string, confirmarCobrancaReal = 
     const search = new URL(`${baseUrl}/customers`);
     search.searchParams.set("externalReference", client.id);
     search.searchParams.set("limit", "1");
-    const foundResponse = await fetch(search, { headers: { access_token: apiKey, "User-Agent": "Fluxo/1.0" }, cache: "no-store" });
+    const foundResponse = await fetch(search, { headers: { access_token: apiKey, "User-Agent": "Recebify/1.0" }, cache: "no-store" });
     const foundBody = await foundResponse.json() as { data?: { id: string }[] };
     customerId = foundBody.data?.[0]?.id ?? null;
     if (!customerId) {
       const customerResponse = await fetch(`${baseUrl}/customers`, {
         method: "POST",
-        headers: { access_token: apiKey, "Content-Type": "application/json", "User-Agent": "Fluxo/1.0" },
+        headers: { access_token: apiKey, "Content-Type": "application/json", "User-Agent": "Recebify/1.0" },
         body: JSON.stringify({
           name: client.nome,
           cpfCnpj: client.cpf || undefined,
@@ -644,7 +644,7 @@ export async function criarLinkAsaas(parcelaId: string, confirmarCobrancaReal = 
   priorPaymentsUrl.searchParams.set("customer", customerId);
   priorPaymentsUrl.searchParams.set("limit", "10");
   const priorResponse = await fetch(priorPaymentsUrl, {
-    headers: { access_token: apiKey, "User-Agent": "Fluxo/1.0" },
+    headers: { access_token: apiKey, "User-Agent": "Recebify/1.0" },
     cache: "no-store",
   });
   if (!priorResponse.ok) throw new Error("Não foi possível verificar cobranças existentes no Asaas.");
@@ -669,13 +669,13 @@ export async function criarLinkAsaas(parcelaId: string, confirmarCobrancaReal = 
     : parcela.data_vencimento;
   const paymentResponse = await fetch(`${baseUrl}/payments`, {
     method: "POST",
-    headers: { access_token: apiKey, "Content-Type": "application/json", "User-Agent": "Fluxo/1.0" },
+    headers: { access_token: apiKey, "Content-Type": "application/json", "User-Agent": "Recebify/1.0" },
     body: JSON.stringify({
       customer: customerId,
       billingType: "UNDEFINED",
       value: saldo,
       dueDate,
-      description: `${loan.descricao || "Cobrança Fluxo"} - parcela ${parcela.numero}`.slice(0, 500),
+      description: `${loan.descricao || "Cobrança Recebify"} - parcela ${parcela.numero}`.slice(0, 500),
       externalReference: parcela.id,
     }),
     cache: "no-store",
@@ -694,7 +694,7 @@ export async function criarLinkAsaas(parcelaId: string, confirmarCobrancaReal = 
     status: payment.status ?? "PENDING",
     invoice_url: payment.invoiceUrl,
   });
-  if (saveChargeError) throw new Error("Link gerado, mas não foi possível registrar a conciliação no Fluxo.");
+  if (saveChargeError) throw new Error("Link gerado, mas não foi possível registrar a conciliação no Recebify.");
   revalidatePath("/");
   return payment.invoiceUrl;
 }

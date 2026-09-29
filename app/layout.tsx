@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Fluxo | Gestão de cobranças",
+  title: "Recebify | Gestão de cobranças",
   description: "Organize cobranças, vencimentos e pagamentos em um só lugar.",
 };
 

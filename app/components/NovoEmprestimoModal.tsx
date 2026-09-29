@@ -56,7 +56,7 @@ export function NovoEmprestimoModal() {
                   <option value="semanal">Semanal</option><option value="quinzenal">Quinzenal</option><option value="mensal">Mensal</option><option value="personalizado">Intervalo personalizado</option>
                 </select></div>
                 {periodicidade === "personalizado" && <div><label className="mb-1 block text-sm font-medium">Repetir a cada quantos dias</label><input name="intervalo_personalizado_dias" type="number" min="1" max="365" step="1" required placeholder="Ex: 10" className={fieldClass} /></div>}
-                <p className="border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">O Fluxo organiza vencimentos e pagamentos. A geração e o envio de links pelo Asaas ainda não estão integrados.</p>
+                <p className="border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">Organize vencimentos e pagamentos no Recebify. Para gerar links de cobrança, conecte sua conta Asaas nas configurações.</p>
                 <div className="flex gap-3 pt-2">
                   <button type="button" onClick={() => setOpen(false)} className="flex-1 border border-gray-300 py-2 text-sm font-medium hover:bg-gray-50">Cancelar</button>
                   <button type="submit" disabled={loading} className="flex-1 bg-blue-700 py-2 text-sm font-semibold text-white hover:bg-blue-800 disabled:opacity-50">{loading ? "Salvando..." : "Salvar cobrança"}</button>

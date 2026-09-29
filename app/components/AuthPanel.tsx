@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 
 const AUTH_CONFIRM_REDIRECT_URL =
-  `${process.env.NEXT_PUBLIC_SITE_URL ?? "https://gestao-de-emprestimo.vercel.app"}/auth/confirm`;
+  `${process.env.NEXT_PUBLIC_SITE_URL ?? "https://recebify.vercel.app"}/auth/confirm`;
 
 export function AuthPanel() {
   const router = useRouter();
@@ -77,7 +77,7 @@ export function AuthPanel() {
       <section className="w-full max-w-md border border-gray-200 bg-white p-6 shadow-sm">
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-gray-950">
-            Fluxo
+            Recebify
           </h1>
           <p className="mt-2 text-sm font-medium text-gray-600">
             {mode === "login"

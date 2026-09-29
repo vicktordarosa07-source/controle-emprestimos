@@ -28,7 +28,7 @@ export function AsaasSettingsPanel() {
   }
 
   function disconnect() {
-    if (!window.confirm("Remover a chave Asaas salva neste Fluxo? As cobranças já criadas continuarão na sua conta Asaas.")) return;
+    if (!window.confirm("Remover a chave Asaas salva neste Recebify? As cobranças já criadas continuarão na sua conta Asaas.")) return;
     setError("");
     startTransition(async () => {
       try {

@@ -1,4 +1,4 @@
-# Fluxo — gestão de cobranças
+# Recebify — gestão de cobranças
 
 Aplicação privada para organizar clientes, cobranças parceladas ou recorrentes, vencimentos e pagamentos. O projeto mantém os nomes históricos das tabelas (`emprestimos` e `parcelas`) para preservar compatibilidade com os dados existentes.
 
@@ -28,7 +28,7 @@ Aplicação privada para organizar clientes, cobranças parceladas ou recorrente
 
 Para um banco já usado por esta aplicação, execute `supabase-cobrancas.sql`, `supabase-cadastro-aberto.sql`, `supabase-recursos-operacionais.sql` e `supabase-saas-fundacao.sql` no SQL Editor. A última migração adiciona preferências e recursos para restauração e integrações sem apagar registros existentes. **Aplique-a antes de publicar o código que usa os novos recursos.**
 
-Pagamentos anteriores à migração continuam nos saldos existentes, mas não é possível reconstruir com precisão o histórico de cada recebimento parcial nem sua data; o novo livro-caixa registra as movimentações feitas após a migração. A restauração exige o arquivo íntegro do Fluxo, é limitada a 5 MB e cancela por completo se qualquer ID já existir; não sobrescreve dados.
+Pagamentos anteriores à migração continuam nos saldos existentes, mas não é possível reconstruir com precisão o histórico de cada recebimento parcial nem sua data; o novo livro-caixa registra as movimentações feitas após a migração. A restauração exige um arquivo de backup íntegro do Recebify, é limitada a 5 MB e cancela por completo se qualquer ID já existir; não sobrescreve dados. Backups antigos mantêm o identificador interno `fluxo-backup-v1` por compatibilidade.
 
 Para uma instalação nova, primeiro configure o esquema-base descrito em `supabase-production.sql` (incluindo o backfill de `OWNER_USER_ID`, quando aplicável) e depois execute, em ordem, `supabase-cobrancas.sql`, `supabase-cadastro-aberto.sql`, `supabase-recursos-operacionais.sql` e `supabase-saas-fundacao.sql`. Não execute o esquema-base sobre uma instalação existente sem revisar o arquivo: ele contém passos de configuração inicial que não são uma migração geral idempotente.
 
@@ -42,7 +42,7 @@ Os resumos diários são opt-in. Para envio, configure `RESEND_API_KEY`, `RESEND
 
 MFA TOTP é opcional e usa Supabase Auth. A tela e as actions exigem o segundo fator para usuários que o cadastraram. Para uma política de MFA obrigatória também nas chamadas diretas ao Supabase, ajuste as políticas RLS/AAL do projeto antes de habilitar essa exigência globalmente.
 
-O app oferece a criação de assinatura mensal para o Fluxo, mas preços precisam ser definidos nas variáveis `SAAS_STARTER_MONTHLY_BRL` e `SAAS_PRO_MONTHLY_BRL`. Use `ASAAS_PLATFORM_API_KEY` e `ASAAS_PLATFORM_ENV=sandbox` para validar. Webhook de assinatura requer o endpoint `/api/webhooks/asaas-plataforma` e um segredo aleatório de pelo menos 32 caracteres em `ASAAS_PLATFORM_WEBHOOK_TOKEN`. `ASAAS_PLATFORM_LIVE_BILLING_ENABLED` deve ficar `false` até validar Sandbox e decidir os valores. Limites de uso e bloqueio por inadimplência permanecem desativados: não suspendem os dados ou a conta.
+O app oferece a criação de assinatura mensal para o Recebify, mas preços precisam ser definidos nas variáveis `SAAS_STARTER_MONTHLY_BRL` e `SAAS_PRO_MONTHLY_BRL`. Use `ASAAS_PLATFORM_API_KEY` e `ASAAS_PLATFORM_ENV=sandbox` para validar. Webhook de assinatura requer o endpoint `/api/webhooks/asaas-plataforma` e um segredo aleatório de pelo menos 32 caracteres em `ASAAS_PLATFORM_WEBHOOK_TOKEN`. `ASAAS_PLATFORM_LIVE_BILLING_ENABLED` deve ficar `false` até validar Sandbox e decidir os valores. Limites de uso e bloqueio por inadimplência permanecem desativados: não suspendem os dados ou a conta.
 
 ## Comandos
 

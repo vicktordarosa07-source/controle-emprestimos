@@ -103,8 +103,8 @@ export async function GET(request: Request) {
         body: JSON.stringify({
           from,
           to: [profile.email],
-          subject: `Fluxo: ${userRows.length} cobrança(s) exigem atenção`,
-          html: `<main style="font-family:Arial,sans-serif;color:#172033"><h1>Resumo de cobranças</h1><p>Vencidas e com vencimento nos próximos 7 dias:</p><ul>${lines}</ul><p>Você pode desativar este resumo nas configurações do Fluxo.</p></main>`,
+          subject: `Recebify: ${userRows.length} cobrança(s) exigem atenção`,
+          html: `<main style="font-family:Arial,sans-serif;color:#172033"><h1>Resumo de cobranças</h1><p>Vencidas e com vencimento nos próximos 7 dias:</p><ul>${lines}</ul><p>Você pode desativar este resumo nas configurações do Recebify.</p></main>`,
         }),
         cache: "no-store",
       });
