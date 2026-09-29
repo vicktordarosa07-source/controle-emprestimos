@@ -1103,7 +1103,7 @@ export default async function Home({ searchParams }: PageProps) {
               Recebify • Gestão de cobranças
             </h1>
             <p className="text-sm font-medium text-gray-500">
-              {activeView === "configuracoes" ? userEmail : `${userEmail} • ${abertas.length} em aberto • ${atrasadas.length} atrasada(s)`}
+              {activeView === "configuracoes" || activeView === "integracoes" ? userEmail : `${userEmail} • ${abertas.length} em aberto • ${atrasadas.length} atrasada(s)`}
             </p>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row">
@@ -1120,7 +1120,7 @@ export default async function Home({ searchParams }: PageProps) {
           </div>
         ) : null}
 
-        {activeView !== "configuracoes" ? <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {activeView !== "configuracoes" && activeView !== "integracoes" ? <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <SummaryCard
             label="Total a receber"
             value={formatCurrency(sumSaldoRestante(abertas, hoje))}
@@ -1152,7 +1152,7 @@ export default async function Home({ searchParams }: PageProps) {
               {view === "lembretes" && activeView !== "configuracoes" ? ` (${lembretes.length})` : view === "lixeira" && activeView !== "configuracoes" ? ` (${arquivadasCount})` : ""}
             </a>
           ))}
-          {activeView !== "configuracoes" ? <>
+          {activeView !== "configuracoes" && activeView !== "integracoes" ? <>
             <a href="/api/export" className="min-h-10 border border-gray-300 px-4 py-2 text-sm font-bold text-gray-700 hover:bg-gray-50">Exportar cobranças CSV</a>
             <a href="/api/export?tipo=pagamentos" className="min-h-10 border border-gray-300 px-4 py-2 text-sm font-bold text-gray-700 hover:bg-gray-50">Exportar pagamentos CSV</a>
             <a href="/api/export?formato=json" className="min-h-10 border border-gray-300 px-4 py-2 text-sm font-bold text-gray-700 hover:bg-gray-50">Baixar backup JSON</a>
