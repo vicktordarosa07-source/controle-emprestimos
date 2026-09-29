@@ -1,3 +1,4 @@
+import nextDynamic from "next/dynamic";
 import { calcularJurosAtraso, diasAtraso, formatDateOnly } from "@/lib/loan-utils";
 import type { PeriodicidadeVencimento, TipoJurosAtraso } from "@/lib/loan-utils";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
@@ -5,13 +6,20 @@ import { AuthPanel, SignOutButton } from "./components/AuthPanel";
 import { NovoEmprestimoModal } from "./components/NovoEmprestimoModal";
 import { MarcarPagoButton } from "./components/MarcarPagoButton";
 import { RegistrarPagamentoForm } from "./components/RegistrarPagamentoForm";
-import { AccountSettingsPanel } from "./components/AccountSettingsPanel";
 import { ContatoCobrancaForm } from "./components/ContatoCobrancaForm";
 import { ArquivarCobrancaButton } from "./components/ArquivarCobrancaButton";
 import { RestaurarCobrancaButton } from "./components/RestaurarCobrancaButton";
-import { MfaPanel } from "./components/MfaPanel";
 import { AsaasChargeButton } from "./components/AsaasChargeButton";
 import { aprovarUsuario, atualizarCliente } from "./actions";
+
+const AccountSettingsPanel = nextDynamic(
+  () => import("./components/AccountSettingsPanel").then((module) => module.AccountSettingsPanel),
+  { loading: () => <div role="status" className="border border-gray-200 bg-white p-4 text-sm text-gray-500">Carregando configurações…</div> },
+);
+const MfaPanel = nextDynamic(
+  () => import("./components/MfaPanel").then((module) => module.MfaPanel),
+  { loading: () => <p role="status" className="text-sm text-gray-500">Carregando verificação…</p> },
+);
 
 export const dynamic = "force-dynamic";
 
@@ -913,6 +921,7 @@ export default async function Home({ searchParams }: PageProps) {
   let contatos: ContatoResumo[] = [];
   let arquivadas: CobrancaArquivada[] = [];
   let pendingUsers: UserProfile[] = [];
+  let arquivadasCount = 0;
   let fetchError: string | null = null;
   let userEmail = "";
   let userFone = "";
@@ -986,57 +995,51 @@ export default async function Home({ searchParams }: PageProps) {
     }
 
     if (activeView !== "configuracoes") {
-    const { data, error } = await supabase
-      .from("parcelas")
-      .select(
-        `
-        id,
-        numero,
-        valor,
-        valor_pago,
-        valor_juros_atraso_pago,
-        data_vencimento,
-        data_pagamento,
-        status,
-        emprestimo_id,
-        emprestimos!inner (
-          id,
-          descricao,
-          periodicidade_vencimento,
-          intervalo_personalizado_dias,
-          juros_atraso_tipo,
-          juros_atraso_valor,
-          clientes!inner (
-            id,
-            nome,
-            endereco,
-            telefone,
-            cpf
+      const needsPayments = activeView === "financeiro" || activeView === "historico";
+      const needsContacts = activeView === "lembretes";
+      const needsArchivedRows = activeView === "lixeira";
+
+      const parcelasQuery = supabase
+        .from("parcelas")
+        .select(`
+          id, numero, valor, valor_pago, valor_juros_atraso_pago,
+          data_vencimento, data_pagamento, status, emprestimo_id,
+          emprestimos!inner (
+            id, descricao, periodicidade_vencimento, intervalo_personalizado_dias,
+            juros_atraso_tipo, juros_atraso_valor,
+            clientes!inner (id, nome, endereco, telefone, cpf)
           )
-        )
-      `
-      )
-      .is("emprestimos.deleted_at", null)
-      .is("emprestimos.clientes.deleted_at", null)
-      .order("data_vencimento", { ascending: true });
+        `)
+        .is("emprestimos.deleted_at", null)
+        .is("emprestimos.clientes.deleted_at", null)
+        .order("data_vencimento", { ascending: true });
+      const pagamentosQuery = needsPayments
+        ? supabase.from("pagamentos").select("id, cliente_id, valor_total, recebido_em, tipo, referencia_pagamento_id, clientes(id, nome, telefone, cpf), pagamento_itens(valor_principal, valor_juros, parcelas(numero))").order("recebido_em", { ascending: false })
+        : Promise.resolve({ data: [], error: null });
+      const contatosQuery = needsContacts
+        ? supabase.from("cobranca_contatos").select("id, parcela_id, canal, observacao, realizado_em").order("realizado_em", { ascending: false })
+        : Promise.resolve({ data: [], error: null });
+      const arquivadasQuery = needsArchivedRows
+        ? supabase.from("emprestimos").select("id, descricao, deleted_at, clientes!inner(id, nome, telefone, cpf, endereco), parcelas(numero, valor, status, data_vencimento)", { count: "exact" }).not("deleted_at", "is", null).order("deleted_at", { ascending: false })
+        : supabase.from("emprestimos").select("id", { count: "exact", head: true }).not("deleted_at", "is", null);
 
-    if (error) {
-      throw new Error(error.message);
-    }
+      const [parcelasResult, pagamentosResult, contatosResult, arquivadasResult] = await Promise.all([
+        parcelasQuery,
+        pagamentosQuery,
+        contatosQuery,
+        arquivadasQuery,
+      ]);
 
-    parcelas = (data as unknown as ParcelaComCliente[]) || [];
+      if (parcelasResult.error) throw new Error(parcelasResult.error.message);
+      if (pagamentosResult.error) throw new Error(pagamentosResult.error.message);
+      if (contatosResult.error) throw new Error(contatosResult.error.message);
+      if (arquivadasResult.error) throw new Error(arquivadasResult.error.message);
 
-    const [pagamentosResult, contatosResult, arquivadasResult] = await Promise.all([
-      supabase.from("pagamentos").select("id, cliente_id, valor_total, recebido_em, tipo, referencia_pagamento_id, clientes(id, nome, telefone, cpf), pagamento_itens(valor_principal, valor_juros, parcelas(numero))").order("recebido_em", { ascending: false }),
-      supabase.from("cobranca_contatos").select("id, parcela_id, canal, observacao, realizado_em").order("realizado_em", { ascending: false }),
-      supabase.from("emprestimos").select("id, descricao, deleted_at, clientes!inner(id, nome, telefone, cpf, endereco), parcelas(numero, valor, status, data_vencimento)").not("deleted_at", "is", null).order("deleted_at", { ascending: false }),
-    ]);
-    if (pagamentosResult.error) throw new Error(pagamentosResult.error.message);
-    if (contatosResult.error) throw new Error(contatosResult.error.message);
-    if (arquivadasResult.error) throw new Error(arquivadasResult.error.message);
-    pagamentos = (pagamentosResult.data ?? []) as unknown as PagamentoResumo[];
-    contatos = (contatosResult.data ?? []) as unknown as ContatoResumo[];
-    arquivadas = (arquivadasResult.data ?? []) as unknown as CobrancaArquivada[];
+      parcelas = (parcelasResult.data as unknown as ParcelaComCliente[]) ?? [];
+      pagamentos = (pagamentosResult.data ?? []) as unknown as PagamentoResumo[];
+      contatos = (contatosResult.data ?? []) as unknown as ContatoResumo[];
+      arquivadas = (arquivadasResult.data ?? []) as unknown as CobrancaArquivada[];
+      arquivadasCount = arquivadasResult.count ?? arquivadas.length;
     }
   } catch (error) {
     fetchError = (error as Error).message;
@@ -1141,7 +1144,7 @@ export default async function Home({ searchParams }: PageProps) {
               aria-current={activeView === view ? "page" : undefined}
               className={`min-h-10 px-4 py-2 text-sm font-bold ${activeView === view ? "bg-blue-700 text-white" : "border border-gray-300 text-gray-700 hover:bg-gray-50"}`}>
               {viewLabels[view]}
-              {view === "lembretes" ? ` (${lembretes.length})` : view === "lixeira" ? ` (${arquivadas.length})` : ""}
+              {view === "lembretes" && activeView !== "configuracoes" ? ` (${lembretes.length})` : view === "lixeira" && activeView !== "configuracoes" ? ` (${arquivadasCount})` : ""}
             </a>
           ))}
           {activeView !== "configuracoes" ? <>
