@@ -72,3 +72,12 @@ test("trial começa na criação da conta e assinatura vencida agenda a primeira
   assert.equal(getFirstBillingDate(createdAt, new Date("2026-09-25T15:00:00.000Z")), "2026-09-29");
   assert.equal(getFirstBillingDate(createdAt, new Date("2026-10-01T15:00:00.000Z")), "2026-10-01");
 });
+
+test("trial zerado agenda a primeira cobrança para hoje", () => {
+  const createdAt = "2026-10-01T12:00:00.000Z";
+  const today = new Date("2026-10-01T15:00:00.000Z");
+  assert.equal(getTrialEnd(createdAt, 0).toISOString(), createdAt);
+  assert.equal(getTrialEndDateOnly(createdAt, 0), "2026-10-01");
+  assert.equal(getFirstBillingDate(createdAt, today, 0), "2026-10-01");
+  assert.equal(getFirstBillingDate("2026-09-20T12:00:00.000Z", today, 0), "2026-10-01");
+});

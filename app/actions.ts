@@ -17,7 +17,7 @@ import {
   parsePositiveNumber,
   parseRequiredText,
 } from "@/lib/loan-utils";
-import { getFirstBillingDate, getTrialEnd } from "@/lib/trial";
+import { getFirstBillingDate, getTrialEnd, TRIAL_DAYS } from "@/lib/trial";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { revalidatePath } from "next/cache";
 import { decryptAsaasCredential } from "@/lib/asaas-crypto";
@@ -380,16 +380,29 @@ const PLAN_CONFIG = {
   starter: { name: "Recebify Essencial", monthlyPrice: process.env.SAAS_STARTER_MONTHLY_BRL },
 } as const;
 
+async function getSaasTrialDays(admin: ReturnType<typeof createSupabaseAdminClient>) {
+  const { data, error } = await admin
+    .from("saas_billing_settings")
+    .select("trial_days")
+    .eq("singleton", true)
+    .maybeSingle();
+  const trialDays = Number(data?.trial_days);
+  return !error && Number.isInteger(trialDays) && trialDays >= 0 && trialDays <= 365
+    ? trialDays
+    : TRIAL_DAYS;
+}
+
 export async function obterAssinaturaSaaS() {
   const { user, supabase } = await requireUser();
   const accessResult = await supabase.rpc("get_own_saas_access");
   const accessRows = !accessResult.error ? accessResult.data as { enforcement_enabled: boolean; can_write: boolean; subscription_status: string | null; access_until: string | null }[] | null : null;
   const access = accessRows?.[0] ?? null;
   const admin = createSupabaseAdminClient();
+  const trialDays = await getSaasTrialDays(admin);
   let { data, error } = await admin.from("saas_subscriptions").select("plan_key,status,trial_ends_at,period_ends_at,asaas_subscription_id").eq("user_id", user.id).maybeSingle();
   if (error) return { configured: false, billingConfigured: false, liveBillingEnabled: false, environment: "sandbox", subscription: null, plans: [], access };
   if (!data) {
-    const trialEndsAt = getTrialEnd(user.created_at ?? new Date()).toISOString();
+    const trialEndsAt = getTrialEnd(user.created_at ?? new Date(), trialDays).toISOString();
     const result = await admin.from("saas_subscriptions").insert({ user_id: user.id, plan_key: "trial", status: "trialing", trial_ends_at: trialEndsAt }).select("plan_key,status,trial_ends_at,period_ends_at,asaas_subscription_id").single();
     data = result.data;
     error = result.error;
@@ -425,6 +438,7 @@ export async function assinarPlanoFluxo(formData: FormData, confirmarProducao = 
     throw new Error("Confirme explicitamente a criação da assinatura em produção.");
   }
   const admin = createSupabaseAdminClient();
+  const trialDays = await getSaasTrialDays(admin);
   const { data: existing } = await admin.from("saas_subscriptions").select("asaas_subscription_id,status").eq("user_id", user.id).maybeSingle();
   if (existing?.asaas_subscription_id && existing.status !== "canceled") throw new Error("Já existe uma assinatura ativa ou em andamento. Cancele-a antes de trocar de plano.");
 
@@ -455,8 +469,8 @@ export async function assinarPlanoFluxo(formData: FormData, confirmarProducao = 
     if (!customerResponse.ok) throw new Error("Não foi possível atualizar o CPF/CNPJ. Confira os dados e tente novamente.");
   }
 
-  const trialEndsAt = getTrialEnd(user.created_at ?? new Date());
-  const nextDueDate = getFirstBillingDate(user.created_at ?? new Date(), new Date());
+  const trialEndsAt = getTrialEnd(user.created_at ?? new Date(), trialDays);
+  const nextDueDate = getFirstBillingDate(user.created_at ?? new Date(), new Date(), trialDays);
   const subscriptionsUrl = new URL(`${base}/subscriptions`);
   subscriptionsUrl.searchParams.set("externalReference", user.id);
   subscriptionsUrl.searchParams.set("limit", "10");
