@@ -51,9 +51,22 @@ export function getAsaasCheckoutUrl(
   const expectedHost = environment === "sandbox" ? "sandbox.asaas.com" : "asaas.com";
   const fallback = `https://${expectedHost}/checkoutSession/show?id=${encodeURIComponent(id)}`;
   const candidate = typeof checkout.link === "string" && checkout.link ? checkout.link : fallback;
-  const url = new URL(candidate);
+  let url: URL;
+  try {
+    url = new URL(candidate);
+  } catch {
+    throw new Error("O Asaas retornou um endereço de checkout inválido.");
+  }
 
-  if (url.protocol !== "https:" || url.hostname !== expectedHost || !url.pathname.startsWith("/checkoutSession/show")) {
+  const allowedHosts = environment === "sandbox"
+    ? new Set(["sandbox.asaas.com"])
+    : new Set(["asaas.com", "www.asaas.com"]);
+  const pathSegments = url.pathname.split("/").filter(Boolean);
+  const isCheckoutPath = pathSegments.some((segment, index) =>
+    segment === "checkoutSession" && pathSegments[index + 1] === "show",
+  );
+
+  if (url.protocol !== "https:" || !allowedHosts.has(url.hostname) || !isCheckoutPath) {
     throw new Error("O Asaas retornou um endereço de checkout inválido.");
   }
 

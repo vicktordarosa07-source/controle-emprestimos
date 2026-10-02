@@ -101,10 +101,20 @@ test("checkout só aceita URL HTTPS oficial do Asaas para o ambiente escolhido",
     "https://asaas.com/checkoutSession/show/checkout-1",
   );
   assert.equal(
+    getAsaasCheckoutUrl("production", { id: "checkout-1", link: "https://www.asaas.com/abc/checkoutSession/show?id=checkout-1" }),
+    "https://www.asaas.com/abc/checkoutSession/show?id=checkout-1",
+  );
+  assert.equal(
+    getAsaasCheckoutUrl("sandbox", { id: "checkout-2", link: "https://sandbox.asaas.com/xyz/checkoutSession/show/checkout-2" }),
+    "https://sandbox.asaas.com/xyz/checkoutSession/show/checkout-2",
+  );
+  assert.equal(
     getAsaasCheckoutUrl("sandbox", { id: "checkout-2" }),
     "https://sandbox.asaas.com/checkoutSession/show?id=checkout-2",
   );
   assert.throws(() => getAsaasCheckoutUrl("production", { id: "checkout-3", link: "https://evil.example/checkoutSession/show/checkout-3" }));
+  assert.throws(() => getAsaasCheckoutUrl("production", { id: "checkout-3", link: "https://sandbox.asaas.com/checkoutSession/show/checkout-3" }));
+  assert.throws(() => getAsaasCheckoutUrl("production", { id: "checkout-3", link: "https://www.asaas.com/account/checkout-3" }));
 });
 
 test("trial zerado agenda a primeira cobrança para hoje", () => {
