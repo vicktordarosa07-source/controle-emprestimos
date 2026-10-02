@@ -22,6 +22,7 @@ import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { revalidatePath } from "next/cache";
 import { decryptAsaasCredential } from "@/lib/asaas-crypto";
 import { createSupabaseAdminClient } from "@/lib/supabase-admin";
+import { buildRecurringCheckoutPayload, getAsaasCheckoutUrl } from "@/lib/asaas-checkout";
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://recebify.vercel.app";
 
@@ -399,11 +400,11 @@ export async function obterAssinaturaSaaS() {
   const access = accessRows?.[0] ?? null;
   const admin = createSupabaseAdminClient();
   const trialDays = await getSaasTrialDays(admin);
-  let { data, error } = await admin.from("saas_subscriptions").select("plan_key,status,trial_ends_at,period_ends_at,asaas_subscription_id").eq("user_id", user.id).maybeSingle();
+  let { data, error } = await admin.from("saas_subscriptions").select("plan_key,status,trial_ends_at,period_ends_at,asaas_subscription_id,asaas_checkout_id,asaas_checkout_url").eq("user_id", user.id).maybeSingle();
   if (error) return { configured: false, billingConfigured: false, liveBillingEnabled: false, environment: "sandbox", subscription: null, plans: [], access };
   if (!data) {
     const trialEndsAt = getTrialEnd(user.created_at ?? new Date(), trialDays).toISOString();
-    const result = await admin.from("saas_subscriptions").insert({ user_id: user.id, plan_key: "trial", status: "trialing", trial_ends_at: trialEndsAt }).select("plan_key,status,trial_ends_at,period_ends_at,asaas_subscription_id").single();
+    const result = await admin.from("saas_subscriptions").insert({ user_id: user.id, plan_key: "trial", status: "trialing", trial_ends_at: trialEndsAt }).select("plan_key,status,trial_ends_at,period_ends_at,asaas_subscription_id,asaas_checkout_id,asaas_checkout_url").single();
     data = result.data;
     error = result.error;
   }
@@ -439,13 +440,26 @@ export async function assinarPlanoFluxo(formData: FormData, confirmarProducao = 
   }
   const admin = createSupabaseAdminClient();
   const trialDays = await getSaasTrialDays(admin);
-  const { data: existing } = await admin.from("saas_subscriptions").select("asaas_subscription_id,status").eq("user_id", user.id).maybeSingle();
+  const { data: existing, error: existingError } = await admin.from("saas_subscriptions")
+    .select("asaas_subscription_id,asaas_checkout_id,asaas_checkout_url,status")
+    .eq("user_id", user.id).maybeSingle();
+  if (existingError) throw new Error("A atualização do checkout ainda não foi aplicada no Supabase. Fale com o suporte antes de tentar novamente.");
   if (existing?.asaas_subscription_id && existing.status !== "canceled") throw new Error("Já existe uma assinatura ativa ou em andamento. Cancele-a antes de trocar de plano.");
+  if (existing?.status === "active" && existing.asaas_checkout_id) throw new Error("Pagamento aprovado; aguarde alguns instantes enquanto vinculamos sua assinatura. Não inicie outro checkout.");
+  if (existing?.asaas_checkout_id && existing.asaas_checkout_url && existing.status === "incomplete") {
+    return { ok: true as const, plan: PLAN_CONFIG[planKey].name, checkoutUrl: existing.asaas_checkout_url };
+  }
 
   const profile = await admin.from("profiles").select("email,fone").eq("id", user.id).maybeSingle();
   if (!profile.data?.email) throw new Error("Não há e-mail cadastrado para a conta.");
   const base = environment === "production" ? "https://api.asaas.com/v3" : "https://api-sandbox.asaas.com/v3";
   const headers = { access_token: apiKey, "Content-Type": "application/json", "User-Agent": "Recebify/1.0" };
+  if (existing?.asaas_checkout_id && existing.status === "incomplete") {
+    const cancelPrevious = await fetch(`${base}/checkouts/${encodeURIComponent(existing.asaas_checkout_id)}/cancel`, {
+      method: "POST", headers, cache: "no-store",
+    });
+    if (!cancelPrevious.ok) throw new Error("Há um checkout anterior ainda não confirmado. Abra-o para continuar ou confira o status no Asaas antes de gerar outro.");
+  }
   const customerLookup = new URL(`${base}/customers`);
   customerLookup.searchParams.set("externalReference", user.id);
   customerLookup.searchParams.set("limit", "1");
@@ -469,37 +483,36 @@ export async function assinarPlanoFluxo(formData: FormData, confirmarProducao = 
     if (!customerResponse.ok) throw new Error("Não foi possível atualizar o CPF/CNPJ. Confira os dados e tente novamente.");
   }
 
-  const trialEndsAt = getTrialEnd(user.created_at ?? new Date(), trialDays);
   const nextDueDate = getFirstBillingDate(user.created_at ?? new Date(), new Date(), trialDays);
-  const subscriptionsUrl = new URL(`${base}/subscriptions`);
-  subscriptionsUrl.searchParams.set("externalReference", user.id);
-  subscriptionsUrl.searchParams.set("limit", "10");
-  const subscriptionsResponse = await fetch(subscriptionsUrl, { headers, cache: "no-store" });
-  if (!subscriptionsResponse.ok) throw new Error("Não foi possível verificar sua assinatura. Tente novamente ou fale com o suporte.");
-  const subscriptions = await subscriptionsResponse.json() as { data?: { id: string; status?: string }[] };
-  let providerSubscriptionId = subscriptions.data?.find((item) => item.status !== "INACTIVE")?.id;
-  if (!providerSubscriptionId) {
-    const subscriptionResponse = await fetch(`${base}/subscriptions`, {
-      method: "POST", headers,
-      body: JSON.stringify({
-        customer: customerId, billingType: "UNDEFINED", value: price,
-        nextDueDate, cycle: "MONTHLY", description: `Recebify ${PLAN_CONFIG[planKey].name}`,
-        externalReference: user.id,
-      }),
-      cache: "no-store",
-    });
-    const providerSubscription = await subscriptionResponse.json() as { id?: string; errors?: { description?: string }[] };
-    if (!subscriptionResponse.ok || !providerSubscription.id) throw new Error("Não foi possível iniciar sua assinatura. Tente novamente ou fale com o suporte.");
-    providerSubscriptionId = providerSubscription.id;
+  const checkoutPayload = buildRecurringCheckoutPayload({
+    siteUrl: SITE_URL,
+    customerId,
+    externalReference: user.id,
+    planName: PLAN_CONFIG[planKey].name,
+    price,
+    nextDueDate,
+  });
+  const checkoutResponse = await fetch(`${base}/checkouts`, {
+    method: "POST", headers, body: JSON.stringify(checkoutPayload), cache: "no-store",
+  });
+  const checkout = await checkoutResponse.json() as { id?: string; link?: string; errors?: { description?: string }[] };
+  if (!checkoutResponse.ok || !checkout.id) {
+    throw new Error(checkout.errors?.[0]?.description ?? "Não foi possível preparar o checkout seguro do Asaas.");
   }
+  const checkoutUrl = getAsaasCheckoutUrl(environment, checkout);
   const { error } = await admin.from("saas_subscriptions").upsert({
-    user_id: user.id, plan_key: planKey, status: "trialing", trial_ends_at: trialEndsAt.toISOString(),
-    asaas_customer_id: customerId, asaas_subscription_id: providerSubscriptionId,
+    user_id: user.id, plan_key: planKey, status: "incomplete", trial_ends_at: null, period_ends_at: null,
+    asaas_customer_id: customerId, asaas_subscription_id: null,
+    asaas_checkout_id: checkout.id, asaas_checkout_url: checkoutUrl,
     asaas_environment: environment, updated_at: new Date().toISOString(),
   });
-  if (error) throw new Error("Não foi possível concluir sua assinatura. Fale com o suporte antes de tentar novamente.");
+  if (error) {
+    await fetch(`${base}/checkouts/${encodeURIComponent(checkout.id)}/cancel`, { method: "POST", headers, cache: "no-store" }).catch(() => undefined);
+    console.error("Checkout Recebify criado, mas não foi possível vinculá-lo ao usuário", { userId: user.id, checkoutId: checkout.id, message: error.message });
+    throw new Error("O checkout foi iniciado, mas não conseguimos vinculá-lo à conta. Não tente pagar; fale com o suporte.");
+  }
   revalidatePath("/");
-  return { ok: true as const, plan: PLAN_CONFIG[planKey].name, nextDueDate, environment };
+  return { ok: true as const, plan: PLAN_CONFIG[planKey].name, checkoutUrl };
   } catch (reason) {
     const message = reason instanceof Error ? reason.message : "Não foi possível iniciar a assinatura. Tente novamente.";
     return { ok: false as const, error: message };
@@ -510,17 +523,18 @@ export async function cancelarAssinaturaFluxo() {
   const { user } = await requireUser();
   const admin = createSupabaseAdminClient();
   const { data: subscription, error: lookupError } = await admin.from("saas_subscriptions")
-    .select("asaas_subscription_id,asaas_environment").eq("user_id", user.id).maybeSingle();
-  if (lookupError || !subscription?.asaas_subscription_id) throw new Error("Não foi encontrada assinatura recorrente para cancelar.");
+    .select("asaas_subscription_id,asaas_checkout_id,asaas_environment").eq("user_id", user.id).maybeSingle();
+  if (lookupError || (!subscription?.asaas_subscription_id && !subscription?.asaas_checkout_id)) throw new Error("Não foi encontrada assinatura ou checkout para cancelar.");
   const environment = subscription.asaas_environment ?? "sandbox";
   const apiKey = process.env.ASAAS_PLATFORM_API_KEY;
   if (!apiKey) throw new Error("A conexão de cobrança do SaaS não está disponível.");
   const base = environment === "production" ? "https://api.asaas.com/v3" : "https://api-sandbox.asaas.com/v3";
-  const response = await fetch(`${base}/subscriptions/${encodeURIComponent(subscription.asaas_subscription_id)}`, {
-    method: "DELETE", headers: { access_token: apiKey, "User-Agent": "Recebify/1.0" }, cache: "no-store",
-  });
+  const headers = { access_token: apiKey, "User-Agent": "Recebify/1.0" };
+  const response = subscription.asaas_subscription_id
+    ? await fetch(`${base}/subscriptions/${encodeURIComponent(subscription.asaas_subscription_id)}`, { method: "DELETE", headers, cache: "no-store" })
+    : await fetch(`${base}/checkouts/${encodeURIComponent(subscription.asaas_checkout_id!)}/cancel`, { method: "POST", headers, cache: "no-store" });
   if (!response.ok) throw new Error("Não foi possível confirmar o cancelamento. Verifique o status da assinatura ou fale com o suporte.");
-  const { error } = await admin.from("saas_subscriptions").update({ status: "canceled", updated_at: new Date().toISOString() }).eq("user_id", user.id);
+  const { error } = await admin.from("saas_subscriptions").update({ status: "canceled", asaas_checkout_id: null, asaas_checkout_url: null, updated_at: new Date().toISOString() }).eq("user_id", user.id);
   if (error) throw new Error("O pedido de cancelamento foi recebido, mas não foi possível atualizar o status. Fale com o suporte.");
   revalidatePath("/");
 }

@@ -23,15 +23,13 @@ export function SubscriptionPanel() {
     startTransition(async () => {
       try {
         const live = state?.environment === "production";
-        if (live && !window.confirm("Isto criará uma assinatura real do Recebify e poderá gerar cobranças recorrentes. Continuar?")) return;
+        if (live && !window.confirm("Você será redirecionado ao checkout seguro do Asaas para informar o cartão e autorizar uma assinatura mensal real. Continuar?")) return;
         const result = await assinarPlanoFluxo(formData, live);
         if (!result.ok) {
           setError(result.error);
           return;
         }
-        setMessage(`Plano ${result.plan} agendado para ${new Date(`${result.nextDueDate}T12:00:00`).toLocaleDateString("pt-BR")}. A confirmação será atualizada após o processamento do pagamento.`);
-        const updated = await obterAssinaturaSaaS();
-        setState(updated);
+        window.location.assign(result.checkoutUrl);
       } catch (reason) { setError((reason as Error).message); }
     });
   }
@@ -50,9 +48,14 @@ export function SubscriptionPanel() {
   }
 
   if (!state) return <section className="border-t border-gray-200 p-4 text-sm text-gray-500">Carregando assinatura…</section>;
-  const sub = state.subscription as { plan_key: string; status: string; trial_ends_at: string | null; period_ends_at: string | null; asaas_subscription_id: string | null } | null;
+  const sub = state.subscription as { plan_key: string; status: string; trial_ends_at: string | null; period_ends_at: string | null; asaas_subscription_id: string | null; asaas_checkout_id: string | null; asaas_checkout_url: string | null } | null;
   const expires = state.access?.access_until ?? sub?.trial_ends_at ?? sub?.period_ends_at;
-  const statusLabel = sub ? ({ trialing: "em avaliação", active: "ativa", canceled: "cancelada", overdue: "atrasada", past_due: "pagamento atrasado", pending: "pendente", inactive: "inativa", incomplete: "incompleta" }[sub.status] ?? sub.status) : "período de avaliação";
+  const hasExistingSubscription = Boolean(sub?.asaas_subscription_id && sub.status !== "canceled");
+  const hasPendingCheckout = Boolean(sub?.status === "incomplete" && sub.asaas_checkout_id && sub.asaas_checkout_url);
+  const paymentConfirmedLinking = Boolean(sub?.status === "active" && !sub.asaas_subscription_id && sub.asaas_checkout_id);
+  const statusLabel = sub ? (sub.status === "incomplete"
+    ? (hasPendingCheckout ? "aguardando pagamento" : "pagamento não concluído")
+    : ({ trialing: "em avaliação", active: "ativa", canceled: "cancelada", overdue: "atrasada", past_due: "pagamento atrasado", pending: "pendente", inactive: "inativa" }[sub.status] ?? sub.status)) : "período de avaliação";
 
   return (
     <section className="border-t border-gray-200 p-4">
@@ -66,6 +69,8 @@ export function SubscriptionPanel() {
           {!state.billingConfigured ? <p role="status" className="mt-2 border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">A assinatura online está temporariamente indisponível. Tente novamente mais tarde ou fale com o suporte.</p> : null}
           {state.environment === "production" && !state.liveBillingEnabled ? <p role="status" className="mt-2 border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">A assinatura online está temporariamente indisponível. Fale com o suporte se precisar de ajuda.</p> : null}
           {sub?.asaas_subscription_id && sub.status !== "canceled" ? <button type="button" disabled={pending} onClick={cancelSubscription} className="mt-2 min-h-9 border border-red-300 px-3 text-sm font-bold text-red-800 disabled:opacity-50">Cancelar assinatura</button> : null}
+          {!sub?.asaas_subscription_id && hasPendingCheckout ? <button type="button" disabled={pending} onClick={cancelSubscription} className="mt-2 min-h-9 border border-red-300 px-3 text-sm font-bold text-red-800 disabled:opacity-50">Cancelar checkout</button> : null}
+          {paymentConfirmedLinking ? <p role="status" className="mt-2 text-sm text-emerald-800">Pagamento confirmado; estamos vinculando sua recorrência. Não inicie outro checkout.</p> : null}
           <div className="mt-3 grid max-w-xl gap-3">
             {state.plans.map((plan) => (
               <form key={plan.key} action={subscribe} className="space-y-2 border border-gray-200 p-3">
@@ -76,7 +81,7 @@ export function SubscriptionPanel() {
                 <label className="block text-sm font-medium text-gray-700" htmlFor={`cpf-cnpj-${plan.key}`}>CPF ou CNPJ do titular</label>
                 <input id={`cpf-cnpj-${plan.key}`} name="cpfCnpj" autoComplete="off" required maxLength={18} placeholder="Digite o CPF ou CNPJ" className="min-h-10 w-full border border-gray-300 px-3 text-sm" aria-describedby={`cpf-cnpj-help-${plan.key}`} />
                 <p id={`cpf-cnpj-help-${plan.key}`} className="text-xs text-gray-500">Necessário para processar o pagamento da assinatura. O Recebify não armazena o documento.</p>
-                <button disabled={pending || !state.billingConfigured || plan.price === null || Boolean(sub?.asaas_subscription_id && sub.status !== "canceled")} className="min-h-10 bg-blue-700 px-4 text-sm font-bold text-white disabled:opacity-50">{pending ? "Processando…" : sub?.asaas_subscription_id && sub.status !== "canceled" ? "Assinatura em andamento" : "Assinar"}</button>
+                <button disabled={pending || !state.billingConfigured || plan.price === null || hasExistingSubscription || paymentConfirmedLinking} className="min-h-10 bg-blue-700 px-4 text-sm font-bold text-white disabled:opacity-50">{pending ? "Preparando checkout…" : hasExistingSubscription ? "Assinatura em andamento" : paymentConfirmedLinking ? "Pagamento confirmado" : hasPendingCheckout ? "Continuar pagamento" : "Assinar"}</button>
               </form>
             ))}
           </div>

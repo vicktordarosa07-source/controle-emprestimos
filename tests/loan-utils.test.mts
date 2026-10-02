@@ -12,6 +12,7 @@ import {
   parseInstallmentCount,
 } from "../lib/loan-utils.ts";
 import { getFirstBillingDate, getTrialEnd, getTrialEndDateOnly } from "../lib/trial.ts";
+import { buildRecurringCheckoutPayload, getAsaasCheckoutUrl } from "../lib/asaas-checkout.ts";
 
 test("parcelas rateiam centavos sem perder o valor total", () => {
   const parcelas = buildParcelas({
@@ -71,6 +72,38 @@ test("trial começa na criação da conta e assinatura vencida agenda a primeira
   assert.equal(getTrialEndDateOnly(createdAt), "2026-09-29");
   assert.equal(getFirstBillingDate(createdAt, new Date("2026-09-25T15:00:00.000Z")), "2026-09-29");
   assert.equal(getFirstBillingDate(createdAt, new Date("2026-10-01T15:00:00.000Z")), "2026-10-01");
+});
+
+test("checkout recorrente usa cartão no Asaas e fornece callbacks de retorno", () => {
+  const payload = buildRecurringCheckoutPayload({
+    siteUrl: "https://recebify.vercel.app",
+    customerId: "cus_example",
+    externalReference: "user-example",
+    planName: "Recebify Essencial",
+    price: 5,
+    nextDueDate: "2026-10-02",
+  });
+
+  assert.deepEqual(payload.billingTypes, ["CREDIT_CARD"]);
+  assert.deepEqual(payload.chargeTypes, ["RECURRENT"]);
+  assert.equal(payload.customer, "cus_example");
+  assert.equal(payload.subscription.cycle, "MONTHLY");
+  assert.equal(payload.items[0].value, 5);
+  assert.equal(new URL(payload.callback.successUrl).searchParams.get("checkout"), "success");
+  assert.equal(new URL(payload.callback.cancelUrl).searchParams.get("checkout"), "cancelled");
+  assert.equal(new URL(payload.callback.expiredUrl).searchParams.get("checkout"), "expired");
+});
+
+test("checkout só aceita URL HTTPS oficial do Asaas para o ambiente escolhido", () => {
+  assert.equal(
+    getAsaasCheckoutUrl("production", { id: "checkout-1", link: "https://asaas.com/checkoutSession/show/checkout-1" }),
+    "https://asaas.com/checkoutSession/show/checkout-1",
+  );
+  assert.equal(
+    getAsaasCheckoutUrl("sandbox", { id: "checkout-2" }),
+    "https://sandbox.asaas.com/checkoutSession/show?id=checkout-2",
+  );
+  assert.throws(() => getAsaasCheckoutUrl("production", { id: "checkout-3", link: "https://evil.example/checkoutSession/show/checkout-3" }));
 });
 
 test("trial zerado agenda a primeira cobrança para hoje", () => {
