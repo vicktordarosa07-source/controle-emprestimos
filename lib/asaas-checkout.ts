@@ -2,7 +2,6 @@ export type AsaasEnvironment = "sandbox" | "production";
 
 type RecurringCheckoutInput = {
   siteUrl: string;
-  customerId: string;
   externalReference: string;
   planName: string;
   price: number;
@@ -24,7 +23,6 @@ export function buildRecurringCheckoutPayload(input: RecurringCheckoutInput) {
     chargeTypes: ["RECURRENT"],
     minutesToExpire: 1440,
     externalReference: input.externalReference,
-    customer: input.customerId,
     callback: {
       successUrl: callbackUrl("success"),
       cancelUrl: callbackUrl("cancelled"),

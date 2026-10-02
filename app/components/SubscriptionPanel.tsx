@@ -78,9 +78,7 @@ export function SubscriptionPanel() {
                 <p className="font-bold text-gray-950">{plan.name}</p>
                 <p className="text-sm text-gray-600">{plan.price === null ? "Preço ainda não configurado" : `${plan.price.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })} / mês`}</p>
                 <p className="text-xs text-gray-500">Um plano simples para começar. Cancele quando quiser.</p>
-                <label className="block text-sm font-medium text-gray-700" htmlFor={`cpf-cnpj-${plan.key}`}>CPF ou CNPJ do titular</label>
-                <input id={`cpf-cnpj-${plan.key}`} name="cpfCnpj" autoComplete="off" required maxLength={18} placeholder="Digite o CPF ou CNPJ" className="min-h-10 w-full border border-gray-300 px-3 text-sm" aria-describedby={`cpf-cnpj-help-${plan.key}`} />
-                <p id={`cpf-cnpj-help-${plan.key}`} className="text-xs text-gray-500">Necessário para processar o pagamento da assinatura. O Recebify não armazena o documento.</p>
+                <p className="text-xs text-gray-500">Seus dados de cobrança e cartão serão informados diretamente no checkout seguro do Asaas.</p>
                 <button disabled={pending || !state.billingConfigured || plan.price === null || hasExistingSubscription || paymentConfirmedLinking} className="min-h-10 bg-blue-700 px-4 text-sm font-bold text-white disabled:opacity-50">{pending ? "Preparando checkout…" : hasExistingSubscription ? "Assinatura em andamento" : paymentConfirmedLinking ? "Pagamento confirmado" : hasPendingCheckout ? "Continuar pagamento" : "Assinar"}</button>
               </form>
             ))}

@@ -7,7 +7,6 @@ import {
   calcularJurosAtraso,
   parseCustomIntervalDays,
   parseCpf,
-  parseCpfCnpj,
   parseDateOnly,
   parseDueFrequency,
   parseEmail,
@@ -424,7 +423,6 @@ export async function assinarPlanoFluxo(formData: FormData, confirmarProducao = 
   const { user } = await requireUser();
   const planKey = String(formData.get("plan_key") ?? "");
   if (planKey !== "starter") throw new Error("Plano inválido.");
-  const cpfCnpj = parseCpfCnpj(formData.get("cpfCnpj"));
   const priceRaw = PLAN_CONFIG[planKey].monthlyPrice;
   const price = Number(priceRaw);
   if (!priceRaw || !Number.isFinite(price) || price <= 0) throw new Error("O preço deste plano ainda não foi configurado pelo administrador do SaaS.");
@@ -441,17 +439,17 @@ export async function assinarPlanoFluxo(formData: FormData, confirmarProducao = 
   const admin = createSupabaseAdminClient();
   const trialDays = await getSaasTrialDays(admin);
   const { data: existing, error: existingError } = await admin.from("saas_subscriptions")
-    .select("asaas_subscription_id,asaas_checkout_id,asaas_checkout_url,status")
+    .select("asaas_subscription_id,asaas_customer_id,asaas_checkout_id,asaas_checkout_url,status")
     .eq("user_id", user.id).maybeSingle();
   if (existingError) throw new Error("A atualização do checkout ainda não foi aplicada no Supabase. Fale com o suporte antes de tentar novamente.");
   if (existing?.asaas_subscription_id && existing.status !== "canceled") throw new Error("Já existe uma assinatura ativa ou em andamento. Cancele-a antes de trocar de plano.");
   if (existing?.status === "active" && existing.asaas_checkout_id) throw new Error("Pagamento aprovado; aguarde alguns instantes enquanto vinculamos sua assinatura. Não inicie outro checkout.");
-  if (existing?.asaas_checkout_id && existing.asaas_checkout_url && existing.status === "incomplete") {
+  const legacyCheckoutWithPrefilledCustomer = existing?.status === "incomplete"
+    && Boolean(existing.asaas_checkout_id && existing.asaas_customer_id);
+  if (existing?.asaas_checkout_id && existing.asaas_checkout_url && existing.status === "incomplete" && !legacyCheckoutWithPrefilledCustomer) {
     return { ok: true as const, plan: PLAN_CONFIG[planKey].name, checkoutUrl: existing.asaas_checkout_url };
   }
 
-  const profile = await admin.from("profiles").select("email,fone").eq("id", user.id).maybeSingle();
-  if (!profile.data?.email) throw new Error("Não há e-mail cadastrado para a conta.");
   const base = environment === "production" ? "https://api.asaas.com/v3" : "https://api-sandbox.asaas.com/v3";
   const headers = { access_token: apiKey, "Content-Type": "application/json", "User-Agent": "Recebify/1.0" };
   if (existing?.asaas_checkout_id && existing.status === "incomplete") {
@@ -460,33 +458,9 @@ export async function assinarPlanoFluxo(formData: FormData, confirmarProducao = 
     });
     if (!cancelPrevious.ok) throw new Error("Há um checkout anterior ainda não confirmado. Abra-o para continuar ou confira o status no Asaas antes de gerar outro.");
   }
-  const customerLookup = new URL(`${base}/customers`);
-  customerLookup.searchParams.set("externalReference", user.id);
-  customerLookup.searchParams.set("limit", "1");
-  const lookupResponse = await fetch(customerLookup, { headers, cache: "no-store" });
-  if (!lookupResponse.ok) throw new Error("Não foi possível preparar a assinatura. Tente novamente ou fale com o suporte.");
-  const lookup = await lookupResponse.json() as { data?: { id: string; cpfCnpj?: string | null }[] };
-  let customerId = lookup.data?.[0]?.id;
-  if (!customerId) {
-    const customerResponse = await fetch(`${base}/customers`, {
-      method: "POST", headers,
-      body: JSON.stringify({ name: profile.data.email, cpfCnpj, email: profile.data.email, mobilePhone: profile.data.fone || undefined, externalReference: user.id }),
-      cache: "no-store",
-    });
-    const customer = await customerResponse.json() as { id?: string; errors?: { description?: string }[] };
-    if (!customerResponse.ok || !customer.id) throw new Error(customer.errors?.[0]?.description ?? "Falha ao criar cliente da assinatura.");
-    customerId = customer.id;
-  } else if (lookup.data?.[0]?.cpfCnpj !== cpfCnpj) {
-    const customerResponse = await fetch(`${base}/customers/${encodeURIComponent(customerId)}`, {
-      method: "PUT", headers, body: JSON.stringify({ cpfCnpj }), cache: "no-store",
-    });
-    if (!customerResponse.ok) throw new Error("Não foi possível atualizar o CPF/CNPJ. Confira os dados e tente novamente.");
-  }
-
   const nextDueDate = getFirstBillingDate(user.created_at ?? new Date(), new Date(), trialDays);
   const checkoutPayload = buildRecurringCheckoutPayload({
     siteUrl: SITE_URL,
-    customerId,
     externalReference: user.id,
     planName: PLAN_CONFIG[planKey].name,
     price,
@@ -502,7 +476,7 @@ export async function assinarPlanoFluxo(formData: FormData, confirmarProducao = 
   const checkoutUrl = getAsaasCheckoutUrl(environment, checkout);
   const { error } = await admin.from("saas_subscriptions").upsert({
     user_id: user.id, plan_key: planKey, status: "incomplete", trial_ends_at: null, period_ends_at: null,
-    asaas_customer_id: customerId, asaas_subscription_id: null,
+    asaas_customer_id: null, asaas_subscription_id: null,
     asaas_checkout_id: checkout.id, asaas_checkout_url: checkoutUrl,
     asaas_environment: environment, updated_at: new Date().toISOString(),
   });

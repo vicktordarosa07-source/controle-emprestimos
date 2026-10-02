@@ -77,7 +77,6 @@ test("trial começa na criação da conta e assinatura vencida agenda a primeira
 test("checkout recorrente usa cartão no Asaas e fornece callbacks de retorno", () => {
   const payload = buildRecurringCheckoutPayload({
     siteUrl: "https://recebify.vercel.app",
-    customerId: "cus_example",
     externalReference: "user-example",
     planName: "Recebify Essencial",
     price: 5,
@@ -86,7 +85,9 @@ test("checkout recorrente usa cartão no Asaas e fornece callbacks de retorno", 
 
   assert.deepEqual(payload.billingTypes, ["CREDIT_CARD"]);
   assert.deepEqual(payload.chargeTypes, ["RECURRENT"]);
-  assert.equal(payload.customer, "cus_example");
+  assert.equal(payload.externalReference, "user-example");
+  assert.equal(Object.hasOwn(payload, "customer"), false);
+  assert.equal(Object.hasOwn(payload, "customerData"), false);
   assert.equal(payload.subscription.cycle, "MONTHLY");
   assert.equal(payload.items[0].value, 5);
   assert.equal(new URL(payload.callback.successUrl).searchParams.get("checkout"), "success");
