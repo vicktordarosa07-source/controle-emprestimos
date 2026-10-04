@@ -21,6 +21,6 @@ export function assertSaasWriteAccess(canWrite: unknown, error: unknown): assert
     throw new Error("Não foi possível confirmar sua assinatura agora. Por segurança, nenhuma alteração foi feita. Tente novamente em instantes.");
   }
   if (canWrite !== true) {
-    throw new Error("Seu período de avaliação terminou. Assine um plano para voltar a cadastrar e editar cobranças; seus dados continuam disponíveis para consulta e exportação.");
+    throw new Error("Seu período de avaliação terminou. Assine um plano para voltar a usar o Recebify. Seus dados permanecem guardados e podem ser exportados.");
   }
 }

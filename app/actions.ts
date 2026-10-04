@@ -5,6 +5,7 @@ import type { UserAttributes } from "@supabase/supabase-js";
 import {
   buildParcelas,
   calcularJurosAtraso,
+  formatDateOnly,
   parseCustomIntervalDays,
   parseCpfCnpj,
   parseCpf,
@@ -17,7 +18,6 @@ import {
   parsePositiveNumber,
   parseRequiredText,
 } from "@/lib/loan-utils";
-import { getFirstBillingDate, getTrialEnd, TRIAL_DAYS } from "@/lib/trial";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { revalidatePath } from "next/cache";
 import { decryptAsaasCredential } from "@/lib/asaas-crypto";
@@ -482,42 +482,33 @@ async function localizarAssinaturaPixAsaas(base: string, headers: Record<string,
   return (result.data ?? []).find((item) => item.id && item.externalReference === userId)?.id ?? null;
 }
 
-async function getSaasTrialDays(admin: ReturnType<typeof createSupabaseAdminClient>) {
-  const { data, error } = await admin
-    .from("saas_billing_settings")
-    .select("trial_days")
-    .eq("singleton", true)
-    .maybeSingle();
-  const trialDays = Number(data?.trial_days);
-  return !error && Number.isInteger(trialDays) && trialDays >= 0 && trialDays <= 365
-    ? trialDays
-    : TRIAL_DAYS;
-}
-
 export async function obterAssinaturaSaaS() {
   const { user, supabase } = await requireUser();
   const accessResult = await supabase.rpc("get_own_saas_access");
   const accessRows = !accessResult.error ? accessResult.data as { enforcement_enabled: boolean; can_write: boolean; subscription_status: string | null; access_until: string | null }[] | null : null;
   const access = accessRows?.[0] ?? null;
   const admin = createSupabaseAdminClient();
-  const trialDays = await getSaasTrialDays(admin);
-  let { data, error } = await admin.from("saas_subscriptions").select("plan_key,status,trial_ends_at,period_ends_at,asaas_customer_id,asaas_subscription_id,asaas_checkout_id,asaas_checkout_url,asaas_billing_type").eq("user_id", user.id).maybeSingle();
+  const { data, error } = await admin.from("saas_subscriptions").select("plan_key,status,trial_ends_at,period_ends_at,asaas_customer_id,asaas_subscription_id,asaas_checkout_id,asaas_checkout_url,asaas_billing_type").eq("user_id", user.id).maybeSingle();
   if (error) return { configured: false, billingConfigured: false, liveBillingEnabled: false, environment: "sandbox", subscription: null, plans: [], access };
-  if (!data) {
-    const trialEndsAt = getTrialEnd(user.created_at ?? new Date(), trialDays).toISOString();
-    const result = await admin.from("saas_subscriptions").insert({ user_id: user.id, plan_key: "trial", status: "trialing", trial_ends_at: trialEndsAt }).select("plan_key,status,trial_ends_at,period_ends_at,asaas_customer_id,asaas_subscription_id,asaas_checkout_id,asaas_checkout_url,asaas_billing_type").single();
-    data = result.data;
-    error = result.error;
-  }
   return {
     configured: true,
     billingConfigured: Boolean(process.env.ASAAS_PLATFORM_API_KEY && (process.env.ASAAS_PLATFORM_WEBHOOK_TOKEN?.length ?? 0) >= 32),
     liveBillingEnabled: process.env.ASAAS_PLATFORM_LIVE_BILLING_ENABLED === "true",
-    subscription: error ? null : data,
+    subscription: data,
     environment: process.env.ASAAS_PLATFORM_ENV === "production" ? "production" : "sandbox",
     plans: Object.entries(PLAN_CONFIG).map(([key, plan]) => ({ key, name: plan.name, price: plan.monthlyPrice ? Number(plan.monthlyPrice) : null })),
     access,
   };
+}
+
+export async function ativarTesteSaaS() {
+  const { supabase } = await requireUser();
+  const { data, error } = await supabase.rpc("activate_own_saas_trial");
+  if (error || typeof data !== "string") {
+    throw new Error("Não foi possível ativar o teste. Atualize a página ou fale com o suporte.");
+  }
+  revalidatePath("/");
+  return data;
 }
 
 export async function assinarPlanoFluxo(formData: FormData, confirmarProducao = false) {
@@ -541,11 +532,14 @@ export async function assinarPlanoFluxo(formData: FormData, confirmarProducao = 
     throw new Error("Confirme explicitamente a criação da assinatura em produção.");
   }
   const admin = createSupabaseAdminClient();
-  const trialDays = await getSaasTrialDays(admin);
   const { data: existing, error: existingError } = await admin.from("saas_subscriptions")
-    .select("asaas_subscription_id,asaas_customer_id,asaas_checkout_id,asaas_checkout_url,asaas_billing_type,status")
+    .select("asaas_subscription_id,asaas_customer_id,asaas_checkout_id,asaas_checkout_url,asaas_billing_type,status,trial_ends_at")
     .eq("user_id", user.id).maybeSingle();
   if (existingError) throw new Error("A atualização do checkout ainda não foi aplicada no Supabase. Fale com o suporte antes de tentar novamente.");
+  if (!existing || existing.status === "pending_trial") throw new Error("Ative primeiro seus 7 dias de teste grátis.");
+  if (existing.status === "trialing" && existing.trial_ends_at && new Date(existing.trial_ends_at) > new Date()) {
+    throw new Error("Seu teste grátis ainda está ativo. A assinatura ficará disponível quando terminar.");
+  }
   if (existing?.asaas_subscription_id && existing.status !== "canceled") {
     if (paymentMethod === "PIX" && existing.asaas_billing_type === "PIX") {
       const base = asaasApiUrl(environment);
@@ -563,7 +557,7 @@ export async function assinarPlanoFluxo(formData: FormData, confirmarProducao = 
 
   const base = asaasApiUrl(environment);
   const headers = { access_token: apiKey, "Content-Type": "application/json", "User-Agent": "Recebify/1.0" };
-  const nextDueDate = getFirstBillingDate(user.created_at ?? new Date(), new Date(), trialDays);
+  const nextDueDate = formatDateOnly(new Date());
 
   if (paymentMethod === "PIX") {
     const { data: reserved, error: reserveError } = await admin.rpc("reserve_saas_pix_creation", { p_user_id: user.id });

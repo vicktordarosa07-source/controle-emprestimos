@@ -20,7 +20,7 @@ Este checklist separa o que foi endurecido no código do que depende de configur
 - [ ] Mantenha `ASAAS_PLATFORM_ENV=sandbox` durante os testes. Não use `live` apenas para conferir a interface.
 - [ ] Teste no Sandbox a criação do checkout mensal, pagamento, webhook, idempotência (mesmo evento entregue duas vezes), pagamento recusado, atraso, cancelamento e retorno do checkout. Confira tanto o estado do Asaas quanto a assinatura no banco e o acesso no app.
 - [ ] Confirme o preço final e trial antes de divulgar. O valor mostrado no site depende de `SAAS_STARTER_MONTHLY_BRL`; mudar a variável exige novo deploy e não altera assinaturas já existentes no Asaas.
-- [ ] Só habilite `ASAAS_PLATFORM_LIVE_BILLING_ENABLED=true` após revisão final e autorização para abrir cobrança real. O bloqueio por assinatura no Supabase é uma chave separada e também permanece desligado até os testes concluídos.
+- [ ] Só habilite `ASAAS_PLATFORM_LIVE_BILLING_ENABLED=true` após revisão final e autorização para abrir cobrança real. O bloqueio por assinatura no Supabase é uma chave separada; confira `enforcement_enabled` e o fluxo de ativação descrito em [`trial-opt-in.md`](trial-opt-in.md) antes de abrir cadastro público.
 - [ ] Escreva claramente preço, periodicidade, eventual trial, quando a primeira cobrança ocorre, como cancelar e o que acontece com acesso e dados após cancelamento.
 - [ ] Documente atendimento para falha de pagamento, estorno, contestação, pedido de cancelamento e conta bloqueada; monitore os logs de webhooks e falhas de e-mail.
 

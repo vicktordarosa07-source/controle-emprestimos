@@ -2,6 +2,7 @@ import nextDynamic from "next/dynamic";
 import { addDays, calcularJurosAtraso, diasAtraso, formatDateOnly } from "@/lib/loan-utils";
 import { fetchAllRows } from "@/lib/pagination";
 import { resolveOwnSaasWriteAccess } from "@/lib/saas-access";
+import { resolveTrialGate } from "@/lib/trial";
 import type { PeriodicidadeVencimento, TipoJurosAtraso } from "@/lib/loan-utils";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { AuthPanel, SignOutButton } from "./components/AuthPanel";
@@ -12,6 +13,8 @@ import { ContatoCobrancaForm } from "./components/ContatoCobrancaForm";
 import { ArquivarCobrancaButton } from "./components/ArquivarCobrancaButton";
 import { RestaurarCobrancaButton } from "./components/RestaurarCobrancaButton";
 import { atualizarCliente } from "./actions";
+import { TrialGate } from "./components/TrialGate";
+import { AccessExpiryWatcher } from "./components/AccessExpiryWatcher";
 
 const AccountSettingsPanel = nextDynamic(
   () => import("./components/AccountSettingsPanel").then((module) => module.AccountSettingsPanel),
@@ -922,6 +925,9 @@ export default async function Home({ searchParams }: PageProps) {
   let emailRemindersEnabled = false;
   let canWrite = false;
   let accessCheckUnavailable = false;
+  let enforcementEnabled = false;
+  let subscriptionStatus: string | null = null;
+  let accessUntil: string | null = null;
   const emailRemindersConfigured = Boolean(
     process.env.RESEND_API_KEY
       && process.env.RESEND_FROM_EMAIL
@@ -962,6 +968,10 @@ export default async function Home({ searchParams }: PageProps) {
       const writeAccess = resolveOwnSaasWriteAccess(accessResult.data, accessResult.error);
       canWrite = writeAccess.canWrite;
       accessCheckUnavailable = writeAccess.unavailable;
+      const access = Array.isArray(accessResult.data) ? accessResult.data[0] as { enforcement_enabled?: boolean; subscription_status?: string | null; access_until?: string | null } | undefined : undefined;
+      enforcementEnabled = access?.enforcement_enabled === true;
+      subscriptionStatus = access?.subscription_status ?? null;
+      accessUntil = access?.access_until ?? null;
     } catch {
       canWrite = false;
       accessCheckUnavailable = true;
@@ -988,6 +998,9 @@ export default async function Home({ searchParams }: PageProps) {
 
     userFone = profile.fone ?? "";
     emailRemindersEnabled = Boolean(profile.email_reminders_enabled);
+
+    const gateMode = resolveTrialGate({ enforcementEnabled, canWrite, unavailable: accessCheckUnavailable, subscriptionStatus });
+    if (gateMode) return <TrialGate mode={gateMode} email={userEmail} />;
 
     if (activeView !== "configuracoes") {
       const needsPayments = activeView === "financeiro" || activeView === "historico";
@@ -1091,6 +1104,7 @@ export default async function Home({ searchParams }: PageProps) {
 
   return (
     <main className="app-shell">
+      {subscriptionStatus === "trialing" && accessUntil ? <AccessExpiryWatcher accessUntil={accessUntil} /> : null}
       <header className="app-header sticky top-0 z-40 border-b border-gray-200 bg-white">
         <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -1129,7 +1143,7 @@ export default async function Home({ searchParams }: PageProps) {
         </aside>
 
         <div className="app-content min-w-0 flex-1 space-y-6">
-          {accessCheckUnavailable ? <div role="alert" className="border border-red-300 bg-red-50 p-4 text-sm text-red-900">Não foi possível confirmar o acesso da sua conta. Por segurança, gravações estão pausadas; seus dados continuam disponíveis para consulta e exportação. Atualize a página ou tente novamente em instantes.</div> : !canWrite ? <div role="status" className="border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950">Seu período de avaliação ou acesso pago terminou. Seus dados continuam disponíveis para consulta e exportação; <a className="font-bold underline" href={buildHref({ view: "configuracoes", q })}>consulte seu plano</a> para voltar a cadastrar, editar e registrar pagamentos.</div> : null}
+          {subscriptionStatus === "trialing" && accessUntil ? <div role="status" className="border border-blue-200 bg-blue-50 p-4 text-sm text-blue-950">Seu teste grátis vai até {new Date(accessUntil).toLocaleDateString("pt-BR")}. Depois disso, o uso ficará pausado até você assinar um plano.</div> : null}
           <nav aria-label="Áreas do sistema" className="app-mobile-nav flex gap-2 overflow-x-auto border border-gray-200 bg-white p-2 md:hidden">
             {primaryNavigation.map(({ view, label, count }) => (
               <a key={view} href={buildHref({ view, q, mes: view === "financeiro" ? mesSelecionado : undefined })}

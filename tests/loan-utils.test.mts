@@ -11,7 +11,7 @@ import {
   parseDateOnly,
   parseInstallmentCount,
 } from "../lib/loan-utils.ts";
-import { getFirstBillingDate, getTrialEnd, getTrialEndDateOnly } from "../lib/trial.ts";
+import { resolveTrialGate } from "../lib/trial.ts";
 import { buildRecurringCheckoutPayload, getAsaasCheckoutUrl } from "../lib/asaas-checkout.ts";
 import { asPixImageDataUrl, buildRecurringPixSubscriptionPayload } from "../lib/asaas-pix.ts";
 import { assertSaasWriteAccess, resolveOwnSaasWriteAccess } from "../lib/saas-access.ts";
@@ -66,14 +66,6 @@ test("datas de vencimento usam o calendário de São Paulo independentemente do 
   assert.equal(addDays("2026-09-29", 7), "2026-10-06");
   assert.equal(diasAtraso("2026-09-28", new Date("2026-09-29T02:30:00.000Z")), 0);
   assert.equal(diasAtraso("2026-09-27", new Date("2026-09-29T02:30:00.000Z")), 1);
-});
-
-test("trial começa na criação da conta e assinatura vencida agenda a primeira cobrança para hoje", () => {
-  const createdAt = "2026-09-22T12:00:00.000Z";
-  assert.equal(getTrialEnd(createdAt).toISOString(), "2026-09-29T12:00:00.000Z");
-  assert.equal(getTrialEndDateOnly(createdAt), "2026-09-29");
-  assert.equal(getFirstBillingDate(createdAt, new Date("2026-09-25T15:00:00.000Z")), "2026-09-29");
-  assert.equal(getFirstBillingDate(createdAt, new Date("2026-10-01T15:00:00.000Z")), "2026-10-01");
 });
 
 test("checkout recorrente usa cartão no Asaas e fornece callbacks de retorno", () => {
@@ -144,13 +136,16 @@ test("normaliza imagem QR Pix em base64 e rejeita conteúdo não-imagem", () => 
   assert.equal(asPixImageDataUrl(null), null);
 });
 
-test("trial zerado agenda a primeira cobrança para hoje", () => {
-  const createdAt = "2026-10-01T12:00:00.000Z";
-  const today = new Date("2026-10-01T15:00:00.000Z");
-  assert.equal(getTrialEnd(createdAt, 0).toISOString(), createdAt);
-  assert.equal(getTrialEndDateOnly(createdAt, 0), "2026-10-01");
-  assert.equal(getFirstBillingDate(createdAt, today, 0), "2026-10-01");
-  assert.equal(getFirstBillingDate("2026-09-20T12:00:00.000Z", today, 0), "2026-10-01");
+test("cadeado distingue teste não iniciado, vencido e acesso pago", () => {
+  const base = { enforcementEnabled: true, canWrite: false, unavailable: false };
+  assert.equal(resolveTrialGate({ ...base, subscriptionStatus: "pending_trial" }), "pending");
+  assert.equal(resolveTrialGate({ ...base, subscriptionStatus: "trialing" }), "expired");
+  assert.equal(resolveTrialGate({ ...base, subscriptionStatus: "incomplete" }), "payment");
+  assert.equal(resolveTrialGate({ ...base, subscriptionStatus: "canceled" }), "payment");
+  assert.equal(resolveTrialGate({ ...base, canWrite: true, subscriptionStatus: "active" }), null);
+  assert.equal(resolveTrialGate({ ...base, canWrite: true, subscriptionStatus: "trialing" }), null);
+  assert.equal(resolveTrialGate({ ...base, unavailable: true, subscriptionStatus: "pending_trial" }), "unavailable");
+  assert.equal(resolveTrialGate({ ...base, enforcementEnabled: false, subscriptionStatus: "pending_trial" }), null);
 });
 
 test("consulta de acesso SaaS bloqueia gravações se o RPC falha ou retorna dados incompletos", () => {

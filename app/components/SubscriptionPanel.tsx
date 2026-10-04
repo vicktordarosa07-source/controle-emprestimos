@@ -2,11 +2,13 @@
 
 import { useEffect, useState, useTransition } from "react";
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 import { assinarPlanoFluxo, cancelarAssinaturaFluxo, obterAssinaturaSaaS, obterCobrancaPixAssinatura } from "@/app/actions";
 
 type BillingState = Awaited<ReturnType<typeof obterAssinaturaSaaS>>;
 
 export function SubscriptionPanel() {
+  const router = useRouter();
   const [state, setState] = useState<BillingState | null>(null);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -17,7 +19,9 @@ export function SubscriptionPanel() {
 
   useEffect(() => {
     let active = true;
-    void obterAssinaturaSaaS().then((value) => { if (active) setState(value); });
+    void obterAssinaturaSaaS()
+      .then((value) => { if (active) setState(value); })
+      .catch(() => { if (active) setError("Não foi possível carregar a assinatura. Atualize a página e tente novamente."); });
     return () => { active = false; };
   }, []);
 
@@ -62,6 +66,7 @@ export function SubscriptionPanel() {
         if (refreshed.subscription?.status === "active") {
           setPixCharge(null);
           setMessage("Pagamento confirmado pelo Asaas. Sua assinatura está ativa.");
+          router.refresh();
         } else if (!result.charge) {
           setMessage("Não há cobrança Pix pendente disponível neste momento. Se acabou de criar, tente novamente em instantes; se já pagou, aguarde a confirmação do Asaas.");
         }
@@ -93,15 +98,18 @@ export function SubscriptionPanel() {
     });
   }
 
-  if (!state) return <section className="border-t border-gray-200 p-4 text-sm text-gray-500">Carregando assinatura…</section>;
+  if (!state) return <section role={error ? "alert" : "status"} className="border-t border-gray-200 p-4 text-sm text-gray-500">{error || "Carregando assinatura…"}</section>;
   const sub = state.subscription as { plan_key: string; status: string; trial_ends_at: string | null; period_ends_at: string | null; asaas_customer_id: string | null; asaas_subscription_id: string | null; asaas_checkout_id: string | null; asaas_checkout_url: string | null; asaas_billing_type: string | null } | null;
   const expires = state.access?.access_until ?? sub?.trial_ends_at ?? sub?.period_ends_at;
   const hasExistingSubscription = Boolean(sub?.asaas_subscription_id && sub.status !== "canceled");
   const hasPendingCheckout = Boolean(sub?.status === "incomplete" && sub.asaas_checkout_id && sub.asaas_checkout_url);
   const paymentConfirmedLinking = Boolean(sub?.status === "active" && !sub.asaas_subscription_id && sub.asaas_checkout_id);
+  const trialActive = sub?.status === "trialing" && Boolean(sub.trial_ends_at && new Date(sub.trial_ends_at) > new Date());
+  const trialNotStarted = sub?.status === "pending_trial";
   const statusLabel = sub ? (sub.status === "incomplete"
     ? (sub.asaas_billing_type === "PIX" ? "aguardando pagamento Pix" : hasPendingCheckout ? "aguardando pagamento" : "pagamento não concluído")
-    : ({ trialing: "em avaliação", active: "ativa", canceled: "cancelada", overdue: "atrasada", past_due: "pagamento atrasado", pending: "pendente", inactive: "inativa" }[sub.status] ?? sub.status)) : "período de avaliação";
+    : sub.status === "trialing" && !trialActive ? "teste encerrado"
+      : ({ pending_trial: "teste ainda não iniciado", trialing: "em avaliação", active: "ativa", canceled: "cancelada", overdue: "atrasada", past_due: "pagamento atrasado", pending: "pendente", inactive: "inativa" }[sub.status] ?? sub.status)) : "assinatura indisponível";
 
   return (
     <section className="border-t border-gray-200 p-4">
@@ -111,7 +119,9 @@ export function SubscriptionPanel() {
       ) : (
         <>
           <p className="mt-1 text-sm text-gray-700">Status: <strong>{statusLabel}</strong>{expires ? ` • ${sub?.status === "canceled" ? "acesso até" : "até"} ${new Date(expires).toLocaleDateString("pt-BR")}` : ""}</p>
-          {state.access?.enforcement_enabled ? <p className="mt-1 text-xs text-gray-600">{state.access.can_write ? "Acesso para cadastrar e editar está liberado." : "Acesso em modo de consulta. Seus dados e exportações continuam disponíveis."}</p> : <p className="mt-1 text-xs text-amber-800">A cobrança do plano ainda não está ativada; o acesso não será bloqueado até a configuração do administrador.</p>}
+          {trialActive ? <p className="mt-2 rounded-lg bg-blue-50 p-3 text-sm text-blue-900">Seus 7 dias grátis já estão ativos. Ao terminar, você poderá escolher cartão ou Pix para continuar. Não há cobrança automática.</p> : null}
+          {trialNotStarted ? <p className="mt-2 rounded-lg bg-blue-50 p-3 text-sm text-blue-900">Ative o teste grátis na tela inicial para começar. O prazo ainda não está correndo.</p> : null}
+          {state.access?.enforcement_enabled ? <p className="mt-1 text-xs text-gray-600">{state.access.can_write ? "Acesso para cadastrar e editar está liberado." : "O uso está pausado. Seus dados permanecem guardados e podem ser exportados."}</p> : <p className="mt-1 text-xs text-amber-800">A cobrança do plano ainda não está ativada; o acesso não será bloqueado até a configuração do administrador.</p>}
           {!state.billingConfigured ? <p role="status" className="mt-2 border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">A assinatura online está temporariamente indisponível. Tente novamente mais tarde ou fale com o suporte.</p> : null}
           {state.environment === "production" && !state.liveBillingEnabled ? <p role="status" className="mt-2 border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">A assinatura online está temporariamente indisponível. Fale com o suporte se precisar de ajuda.</p> : null}
           {sub?.asaas_subscription_id && sub.status !== "canceled" ? <button type="button" disabled={pending} onClick={cancelSubscription} className="mt-2 min-h-9 border border-red-300 px-3 text-sm font-bold text-red-800 disabled:opacity-50">Cancelar assinatura</button> : null}
@@ -139,7 +149,7 @@ export function SubscriptionPanel() {
               ) : null}
             </div>
           ) : null}
-          <div className="mt-3 grid max-w-xl gap-3">
+          {!trialActive && !trialNotStarted && sub ? <div className="mt-3 grid max-w-xl gap-3">
             {state.plans.map((plan) => (
               <form key={plan.key} action={subscribe} className="space-y-2 border border-gray-200 p-3">
                 <input type="hidden" name="plan_key" value={plan.key} />
@@ -179,7 +189,7 @@ export function SubscriptionPanel() {
                 <button disabled={pending || !state.billingConfigured || plan.price === null || hasExistingSubscription || paymentConfirmedLinking} className="min-h-10 bg-blue-700 px-4 text-sm font-bold text-white disabled:opacity-50">{pending ? paymentMethod === "PIX" ? "Preparando Pix…" : "Preparando checkout…" : hasExistingSubscription ? "Assinatura em andamento" : paymentConfirmedLinking ? "Pagamento confirmado" : hasPendingCheckout && paymentMethod === "CREDIT_CARD" ? "Continuar checkout" : hasPendingCheckout ? "Trocar para Pix" : paymentMethod === "PIX" ? "Gerar cobrança Pix" : "Assinar com cartão"}</button>
               </form>
             ))}
-          </div>
+          </div> : null}
         </>
       )}
       {error ? <p role="alert" className="mt-2 text-sm font-semibold text-red-700">{error}</p> : null}
