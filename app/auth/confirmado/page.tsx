@@ -3,12 +3,14 @@ import Link from "next/link";
 type ConfirmadoPageProps = {
   searchParams?: Promise<{
     status?: string;
+    fluxo?: string;
   }>;
 };
 
 export default async function ConfirmadoPage({ searchParams }: ConfirmadoPageProps) {
   const params = (await searchParams) ?? {};
   const success = params.status === "sucesso";
+  const passwordRecovery = params.fluxo === "redefinir-senha";
 
   return (
     <main className="grid min-h-screen place-items-center bg-gray-50 px-4">
@@ -24,12 +26,16 @@ export default async function ConfirmadoPage({ searchParams }: ConfirmadoPagePro
         </div>
 
         <h1 className="mt-5 text-2xl font-bold text-gray-950">
-          {success ? "E-mail validado com sucesso" : "Não foi possível validar o e-mail"}
+          {passwordRecovery
+            ? "Não foi possível redefinir a senha"
+            : success ? "E-mail validado com sucesso" : "Não foi possível validar o e-mail"}
         </h1>
         <p className="mt-3 text-sm font-medium text-gray-600">
-          {success
-            ? "Seu cadastro foi confirmado. Agora você já pode acessar o sistema."
-            : "O link pode estar vencido ou já ter sido usado. Tente entrar novamente ou refaça o cadastro."}
+          {passwordRecovery
+            ? "O link pode ter expirado ou já ter sido usado. Volte à tela de acesso e solicite outro link."
+            : success
+              ? "Seu cadastro foi confirmado. Agora você já pode acessar o sistema."
+              : "O link pode estar vencido ou já ter sido usado. Tente entrar novamente ou refaça o cadastro."}
         </p>
 
         <Link

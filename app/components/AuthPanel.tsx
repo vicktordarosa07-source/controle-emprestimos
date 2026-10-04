@@ -11,7 +11,7 @@ export function AuthPanel() {
   const router = useRouter();
   const supabase = useMemo(() => createSupabaseBrowserClient(), []);
   const [isPending, startTransition] = useTransition();
-  const [mode, setMode] = useState<"login" | "signup">("login");
+  const [mode, setMode] = useState<"login" | "signup" | "recover">("login");
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -34,6 +34,24 @@ export function AuthPanel() {
 
     if (mode === "signup" && password !== confirmPassword) {
       setError("As senhas digitadas não conferem.");
+      return;
+    }
+
+    if (mode === "recover") {
+      const redirectTo = `${AUTH_CONFIRM_REDIRECT_URL}?next=${encodeURIComponent("/auth/redefinir-senha")}`;
+      startTransition(async () => {
+        const { error: recoveryError } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
+        if (recoveryError) {
+          setError("Não foi possível enviar o link agora. Confira o e-mail e tente novamente.");
+          return;
+        }
+        setMessage("Se houver uma conta com esse e-mail, enviaremos instruções para redefinir a senha.");
+      });
+      return;
+    }
+
+    if (mode === "signup" && password.length < 8) {
+      setError("Crie uma senha com pelo menos 8 caracteres.");
       return;
     }
 
@@ -66,7 +84,7 @@ export function AuthPanel() {
     });
   }
 
-  function changeMode(nextMode: "login" | "signup") {
+  function changeMode(nextMode: "login" | "signup" | "recover") {
     setMode(nextMode);
     setError(null);
     setMessage(null);
@@ -81,13 +99,20 @@ export function AuthPanel() {
             <span className="auth-brand-name">Recebify</span>
           </div>
           <div className="auth-copy">
-            <h1>{mode === "login" ? "Acesse sua conta" : "Crie seu acesso"}</h1>
+            <h1>{mode === "login" ? "Acesse sua conta" : mode === "signup" ? "Crie seu acesso" : "Redefina sua senha"}</h1>
             <p>
             {mode === "login"
-              ? "Entre para gerenciar clientes, cobranças e pagamentos."
-              : "Crie seu acesso para organizar cobranças e vencimentos."}
+              ? "Organize cobranças, parcelas e recebimentos em um só lugar."
+              : mode === "signup"
+                ? "Crie seu acesso para acompanhar vencimentos e pagamentos."
+                : "Informe seu e-mail e enviaremos um link seguro para criar outra senha."}
             </p>
           </div>
+          {mode !== "recover" ? <ul className="mt-6 space-y-3 text-sm text-gray-700">
+            <li>• Veja cobranças em aberto, vencidas e pagas.</li>
+            <li>• Registre pagamentos parciais e consulte o histórico.</li>
+            <li>• Exporte seus relatórios e mantenha uma cópia dos dados.</li>
+          </ul> : null}
           <div className="auth-aside-line" aria-hidden="true" />
         </div>
 
@@ -165,7 +190,7 @@ export function AuthPanel() {
             </div>
           ) : null}
 
-          <div>
+          {mode !== "recover" ? <div>
             <label className="mb-1 block text-sm font-semibold" htmlFor="password">
               Senha
             </label>
@@ -174,13 +199,13 @@ export function AuthPanel() {
               name="password"
               type="password"
               required
-              minLength={6}
+              minLength={mode === "signup" ? 8 : undefined}
               autoComplete={mode === "signup" ? "new-password" : "current-password"}
               className="min-h-11 w-full border border-gray-300 px-3 text-sm outline-none focus:border-blue-700 focus:ring-2 focus:ring-blue-100"
             />
-          </div>
+          </div> : null}
 
-          {mode === "signup" ? (
+            {mode === "signup" ? (
             <div>
               <label className="mb-1 block text-sm font-semibold" htmlFor="confirm_password">
                 Repetir senha
@@ -190,7 +215,7 @@ export function AuthPanel() {
                 name="confirm_password"
                 type="password"
                 required
-                minLength={6}
+                minLength={8}
                 autoComplete="new-password"
                 className="min-h-11 w-full border border-gray-300 px-3 text-sm outline-none focus:border-blue-700 focus:ring-2 focus:ring-blue-100"
               />
@@ -204,12 +229,15 @@ export function AuthPanel() {
             {isPending
               ? mode === "signup"
                 ? "Cadastrando..."
-                : "Entrando..."
+                : mode === "recover" ? "Enviando..." : "Entrando..."
               : mode === "signup"
                 ? "Cadastrar"
-                : "Entrar"}
+                : mode === "recover" ? "Enviar link de redefinição" : "Entrar"}
           </button>
         </form>
+        <div className="mt-4 text-center text-sm">
+          {mode === "login" ? <button type="button" onClick={() => changeMode("recover")} className="font-semibold text-blue-700 underline">Esqueci minha senha</button> : mode === "recover" ? <button type="button" onClick={() => changeMode("login")} className="font-semibold text-blue-700 underline">Voltar para entrar</button> : null}
+        </div>
           </div>
         </div>
       </section>

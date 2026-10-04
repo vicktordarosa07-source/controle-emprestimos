@@ -7,7 +7,8 @@ export async function GET(request: NextRequest) {
   const code = requestUrl.searchParams.get("code");
   const tokenHash = requestUrl.searchParams.get("token_hash");
   const type = requestUrl.searchParams.get("type") as EmailOtpType | null;
-  const redirectUrl = new URL("/auth/confirmado", requestUrl.origin);
+  const isPasswordRecovery = requestUrl.searchParams.get("next") === "/auth/redefinir-senha";
+  const redirectUrl = new URL(isPasswordRecovery ? "/auth/redefinir-senha" : "/auth/confirmado", requestUrl.origin);
 
   try {
     const supabase = await createSupabaseServerClient();
@@ -19,6 +20,10 @@ export async function GET(request: NextRequest) {
           : { error: new Error("Link de confirmação inválido.") };
 
     if (result.error) {
+      if (isPasswordRecovery) {
+        redirectUrl.pathname = "/auth/confirmado";
+        redirectUrl.searchParams.set("fluxo", "redefinir-senha");
+      }
       redirectUrl.searchParams.set("status", "erro");
     } else {
       redirectUrl.searchParams.set("status", "sucesso");

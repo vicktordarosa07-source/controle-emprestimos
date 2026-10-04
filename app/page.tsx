@@ -1,6 +1,7 @@
 import nextDynamic from "next/dynamic";
 import { addDays, calcularJurosAtraso, diasAtraso, formatDateOnly } from "@/lib/loan-utils";
 import { fetchAllRows } from "@/lib/pagination";
+import { resolveOwnSaasWriteAccess } from "@/lib/saas-access";
 import type { PeriodicidadeVencimento, TipoJurosAtraso } from "@/lib/loan-utils";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { AuthPanel, SignOutButton } from "./components/AuthPanel";
@@ -753,11 +754,10 @@ function ClienteCard({
 
             <div>
               <label className="block text-xs font-bold uppercase tracking-wide text-gray-500">
-                CPF
+                CPF (opcional)
               </label>
               <input
                 name="cpf"
-                required
                 inputMode="numeric"
                 maxLength={14}
                 defaultValue={formatCpf(cadastro.cpf)}
@@ -848,12 +848,14 @@ function ClientesSection({
   hoje,
   hojeStr,
   canWrite,
+  emptyMessage,
 }: {
   title: string;
   clientes: ClienteResumo[];
   hoje: Date;
   hojeStr: string;
   canWrite: boolean;
+  emptyMessage: string;
 }) {
   return (
     <section className="space-y-3">
@@ -866,7 +868,7 @@ function ClientesSection({
 
       {clientes.length === 0 ? (
         <div className="border border-dashed border-gray-300 bg-white p-6 text-center text-sm font-medium text-gray-500">
-          Nenhum cliente nesta visão.
+          {emptyMessage}
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
@@ -881,6 +883,22 @@ function ClientesSection({
           ))}
         </div>
       )}
+    </section>
+  );
+}
+
+function FirstCobrancaGuide({ canWrite }: { canWrite: boolean }) {
+  return (
+    <section className="border border-blue-200 bg-white p-5 shadow-sm sm:p-6" aria-labelledby="primeiros-passos-title">
+      <p className="text-xs font-bold uppercase tracking-wide text-blue-700">Primeiros passos</p>
+      <h2 id="primeiros-passos-title" className="mt-1 text-xl font-bold text-gray-950">Organize sua primeira cobrança</h2>
+      <p className="mt-2 max-w-2xl text-sm text-gray-600">No Recebify, cliente, valor e parcelas ficam reunidos no mesmo cadastro. Depois, acompanhe vencimentos, registre pagamentos e consulte o histórico.</p>
+      <ol className="mt-4 grid gap-3 text-sm text-gray-700 sm:grid-cols-3">
+        <li className="border border-gray-200 p-3"><strong className="block text-gray-950">1. Cadastre</strong>Informe os dados básicos do cliente.</li>
+        <li className="border border-gray-200 p-3"><strong className="block text-gray-950">2. Configure</strong>Defina o valor, o número de parcelas e o primeiro vencimento.</li>
+        <li className="border border-gray-200 p-3"><strong className="block text-gray-950">3. Acompanhe</strong>Registre recebimentos e veja o que está em aberto ou atrasado.</li>
+      </ol>
+      <p className="mt-4 text-sm text-gray-600">{canWrite ? "Para começar, use “+ Nova cobrança” no topo da tela." : "A consulta está disponível; confira o acesso do seu plano em Configurações para cadastrar."}</p>
     </section>
   );
 }
@@ -902,7 +920,14 @@ export default async function Home({ searchParams }: PageProps) {
   let userEmail = "";
   let userFone = "";
   let emailRemindersEnabled = false;
-  let canWrite = true;
+  let canWrite = false;
+  let accessCheckUnavailable = false;
+  const emailRemindersConfigured = Boolean(
+    process.env.RESEND_API_KEY
+      && process.env.RESEND_FROM_EMAIL
+      && process.env.CRON_SECRET
+      && process.env.SUPABASE_SERVICE_ROLE_KEY,
+  );
 
   try {
     const supabase = await createSupabaseServerClient();
@@ -932,10 +957,14 @@ export default async function Home({ searchParams }: PageProps) {
     }
 
     userEmail = user.email ?? "";
-    const accessResult = await supabase.rpc("get_own_saas_access");
-    if (!accessResult.error) {
-      const accessRows = accessResult.data as { can_write?: boolean }[] | null;
-      if (accessRows?.length) canWrite = accessRows[0].can_write !== false;
+    try {
+      const accessResult = await supabase.rpc("get_own_saas_access");
+      const writeAccess = resolveOwnSaasWriteAccess(accessResult.data, accessResult.error);
+      canWrite = writeAccess.canWrite;
+      accessCheckUnavailable = writeAccess.unavailable;
+    } catch {
+      canWrite = false;
+      accessCheckUnavailable = true;
     }
 
     const { data: profile, error: profileError } = await supabase
@@ -1093,17 +1122,14 @@ export default async function Home({ searchParams }: PageProps) {
                 </a>
               ))}
             </div>
-            {activeView !== "configuracoes" ? <div className="mt-4 space-y-1 border-t border-gray-200 pt-3">
-              <p className="mb-2 px-3 text-xs font-bold uppercase tracking-wide text-gray-500">Exportar e backup</p>
-              <a href="/api/export" className="flex min-h-10 items-center px-3 text-sm font-medium text-gray-600 hover:bg-gray-50 hover:text-gray-950">Cobranças CSV</a>
-              <a href="/api/export?tipo=pagamentos" className="flex min-h-10 items-center px-3 text-sm font-medium text-gray-600 hover:bg-gray-50 hover:text-gray-950">Pagamentos CSV</a>
-              <a href="/api/export?formato=json" className="flex min-h-10 items-center px-3 text-sm font-medium text-gray-600 hover:bg-gray-50 hover:text-gray-950">Backup JSON</a>
+            {activeView !== "configuracoes" ? <div className="mt-4 border-t border-gray-200 pt-3">
+              <a href={`${buildHref({ view: "configuracoes", q })}#backup`} className="flex min-h-10 items-center px-3 text-sm font-medium text-gray-600 hover:bg-gray-50 hover:text-gray-950">Exportar dados e backups</a>
             </div> : null}
           </nav>
         </aside>
 
         <div className="app-content min-w-0 flex-1 space-y-6">
-          {!canWrite ? <div role="status" className="border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950">Seu período de avaliação terminou. Seus dados continuam disponíveis para consulta e exportação; assine um plano em <a className="font-bold underline" href={buildHref({ view: "configuracoes", q })}>Configurações</a> para voltar a cadastrar, editar e registrar pagamentos.</div> : null}
+          {accessCheckUnavailable ? <div role="alert" className="border border-red-300 bg-red-50 p-4 text-sm text-red-900">Não foi possível confirmar o acesso da sua conta. Por segurança, gravações estão pausadas; seus dados continuam disponíveis para consulta e exportação. Atualize a página ou tente novamente em instantes.</div> : !canWrite ? <div role="status" className="border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950">Seu período de avaliação ou acesso pago terminou. Seus dados continuam disponíveis para consulta e exportação; <a className="font-bold underline" href={buildHref({ view: "configuracoes", q })}>consulte seu plano</a> para voltar a cadastrar, editar e registrar pagamentos.</div> : null}
           <nav aria-label="Áreas do sistema" className="app-mobile-nav flex gap-2 overflow-x-auto border border-gray-200 bg-white p-2 md:hidden">
             {primaryNavigation.map(({ view, label, count }) => (
               <a key={view} href={buildHref({ view, q, mes: view === "financeiro" ? mesSelecionado : undefined })}
@@ -1113,14 +1139,7 @@ export default async function Home({ searchParams }: PageProps) {
               </a>
             ))}
           </nav>
-          {activeView !== "configuracoes" ? <details className="border border-gray-200 bg-white p-3 text-sm md:hidden">
-            <summary className="cursor-pointer font-semibold text-gray-700">Exportar e backup</summary>
-            <div className="mt-3 flex flex-wrap gap-2">
-              <a href="/api/export" className="border border-gray-300 px-3 py-2 font-medium text-gray-700">Cobranças CSV</a>
-              <a href="/api/export?tipo=pagamentos" className="border border-gray-300 px-3 py-2 font-medium text-gray-700">Pagamentos CSV</a>
-              <a href="/api/export?formato=json" className="border border-gray-300 px-3 py-2 font-medium text-gray-700">Backup JSON</a>
-            </div>
-          </details> : null}
+          {activeView !== "configuracoes" ? <a href={`${buildHref({ view: "configuracoes", q })}#backup`} className="block border border-gray-200 bg-white p-3 text-sm font-semibold text-gray-700 md:hidden">Exportar dados e backups</a> : null}
 
         {fetchError ? (
           <div className="border border-red-200 bg-red-50 p-4 text-sm font-medium text-red-700">
@@ -1159,15 +1178,16 @@ export default async function Home({ searchParams }: PageProps) {
               <nav aria-label="Seções de configurações" className="settings-anchor-nav mt-4 flex flex-wrap gap-2">
                 {[
                   ["#dados-da-conta", "Conta"],
+                  ["#lembretes-email", "Lembretes"],
                   ["#assinatura", "Plano"],
                   ["#seguranca", "Segurança"],
-                  ["#backup", "Backup"],
+                  ["#backup", "Seus dados"],
                 ].map(([href, label]) => (
                   <a key={href} href={href} className="min-h-9 border border-gray-300 px-3 py-2 text-sm font-semibold text-gray-700 hover:border-blue-700 hover:text-blue-700">{label}</a>
                 ))}
               </nav>
             </header>
-            <AccountSettingsPanel email={userEmail} fone={userFone} emailRemindersEnabled={emailRemindersEnabled} canWrite={canWrite} />
+            <AccountSettingsPanel email={userEmail} fone={userFone} emailRemindersEnabled={emailRemindersEnabled} emailRemindersConfigured={emailRemindersConfigured} canWrite={canWrite} accessCheckUnavailable={accessCheckUnavailable} />
           </section>
         ) : null}
 
@@ -1268,13 +1288,18 @@ export default async function Home({ searchParams }: PageProps) {
           </div>
         </section> : null}
 
-        {(["abertas", "atrasadas", "pagas", "todas"].includes(activeView)) ? <ClientesSection
-          title={viewLabels[activeView]}
-          clientes={visibleClientes}
-          hoje={hoje}
-          hojeStr={hojeStr}
-          canWrite={canWrite}
-        /> : null}
+        {(["abertas", "atrasadas", "pagas", "todas"].includes(activeView)) ? (
+          activeView === "abertas" && parcelas.length === 0 && arquivadasCount === 0 && !q && !fetchError
+            ? <FirstCobrancaGuide canWrite={canWrite} />
+            : <ClientesSection
+                title={viewLabels[activeView]}
+                clientes={visibleClientes}
+                hoje={hoje}
+                hojeStr={hojeStr}
+                canWrite={canWrite}
+                emptyMessage={q ? `Nenhum resultado para “${q}”.` : "Nenhum cliente nesta visão."}
+              />
+        ) : null}
         </div>
       </div>
     </main>

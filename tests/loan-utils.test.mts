@@ -13,6 +13,8 @@ import {
 } from "../lib/loan-utils.ts";
 import { getFirstBillingDate, getTrialEnd, getTrialEndDateOnly } from "../lib/trial.ts";
 import { buildRecurringCheckoutPayload, getAsaasCheckoutUrl } from "../lib/asaas-checkout.ts";
+import { asPixImageDataUrl, buildRecurringPixSubscriptionPayload } from "../lib/asaas-pix.ts";
+import { assertSaasWriteAccess, resolveOwnSaasWriteAccess } from "../lib/saas-access.ts";
 
 test("parcelas rateiam centavos sem perder o valor total", () => {
   const parcelas = buildParcelas({
@@ -117,6 +119,31 @@ test("checkout só aceita URL HTTPS oficial do Asaas para o ambiente escolhido",
   assert.throws(() => getAsaasCheckoutUrl("production", { id: "checkout-3", link: "https://www.asaas.com/account/checkout-3" }));
 });
 
+test("assinatura Pix configura cobrança recorrente mensal sem débito automático", () => {
+  assert.deepEqual(buildRecurringPixSubscriptionPayload({
+    customerId: "cus_test_123",
+    externalReference: "user-example",
+    planName: "Recebify Essencial",
+    price: 29.9,
+    nextDueDate: "2026-10-03",
+  }), {
+    customer: "cus_test_123",
+    billingType: "PIX",
+    nextDueDate: "2026-10-03",
+    value: 29.9,
+    cycle: "MONTHLY",
+    description: "Assinatura mensal Recebify Essencial",
+    externalReference: "user-example",
+  });
+});
+
+test("normaliza imagem QR Pix em base64 e rejeita conteúdo não-imagem", () => {
+  assert.equal(asPixImageDataUrl("aGVsbG8="), "data:image/png;base64,aGVsbG8=");
+  assert.equal(asPixImageDataUrl("data:image/png;base64,aGVsbG8="), "data:image/png;base64,aGVsbG8=");
+  assert.equal(asPixImageDataUrl("javascript:alert(1)"), null);
+  assert.equal(asPixImageDataUrl(null), null);
+});
+
 test("trial zerado agenda a primeira cobrança para hoje", () => {
   const createdAt = "2026-10-01T12:00:00.000Z";
   const today = new Date("2026-10-01T15:00:00.000Z");
@@ -124,4 +151,19 @@ test("trial zerado agenda a primeira cobrança para hoje", () => {
   assert.equal(getTrialEndDateOnly(createdAt, 0), "2026-10-01");
   assert.equal(getFirstBillingDate(createdAt, today, 0), "2026-10-01");
   assert.equal(getFirstBillingDate("2026-09-20T12:00:00.000Z", today, 0), "2026-10-01");
+});
+
+test("consulta de acesso SaaS bloqueia gravações se o RPC falha ou retorna dados incompletos", () => {
+  assert.deepEqual(resolveOwnSaasWriteAccess(null, new Error("offline")), { canWrite: false, unavailable: true });
+  assert.deepEqual(resolveOwnSaasWriteAccess([], null), { canWrite: false, unavailable: true });
+  assert.deepEqual(resolveOwnSaasWriteAccess([{ can_write: "true" }], null), { canWrite: false, unavailable: true });
+  assert.deepEqual(resolveOwnSaasWriteAccess([{ can_write: true }], null), { canWrite: true, unavailable: false });
+  assert.deepEqual(resolveOwnSaasWriteAccess([{ can_write: false }], null), { canWrite: false, unavailable: false });
+});
+
+test("ações SaaS falham fechadas diante de falha ou acesso negado", () => {
+  assert.throws(() => assertSaasWriteAccess(true, new Error("offline")), /não foi possível confirmar/i);
+  assert.throws(() => assertSaasWriteAccess(false, null), /período de avaliação terminou/i);
+  assert.throws(() => assertSaasWriteAccess(undefined, null), /período de avaliação terminou/i);
+  assert.doesNotThrow(() => assertSaasWriteAccess(true, null));
 });

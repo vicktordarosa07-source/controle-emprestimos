@@ -10,10 +10,12 @@ type Props = {
   email: string;
   fone: string;
   emailRemindersEnabled: boolean;
+  emailRemindersConfigured: boolean;
   canWrite?: boolean;
+  accessCheckUnavailable?: boolean;
 };
 
-export function AccountSettingsPanel({ email, fone, emailRemindersEnabled, canWrite = true }: Props) {
+export function AccountSettingsPanel({ email, fone, emailRemindersEnabled, emailRemindersConfigured, canWrite = true, accessCheckUnavailable = false }: Props) {
   const [isPending, startTransition] = useTransition();
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -91,7 +93,7 @@ export function AccountSettingsPanel({ email, fone, emailRemindersEnabled, canWr
             <input
               name="password"
               type="password"
-              minLength={6}
+              minLength={8}
               autoComplete="new-password"
               placeholder="Deixe em branco para manter"
               className="mt-1 min-h-11 w-full border border-gray-300 px-3 text-sm font-semibold outline-none focus:border-blue-700 focus:ring-2 focus:ring-blue-100"
@@ -105,7 +107,7 @@ export function AccountSettingsPanel({ email, fone, emailRemindersEnabled, canWr
             <input
               name="confirm_password"
               type="password"
-              minLength={6}
+              minLength={8}
               autoComplete="new-password"
               placeholder="Repita apenas se alterar"
               className="mt-1 min-h-11 w-full border border-gray-300 px-3 text-sm font-semibold outline-none focus:border-blue-700 focus:ring-2 focus:ring-blue-100"
@@ -126,14 +128,16 @@ export function AccountSettingsPanel({ email, fone, emailRemindersEnabled, canWr
 
       <section id="lembretes-email" className="settings-section scroll-mt-24 border border-gray-200 bg-white p-5 shadow-sm">
         <h3 className="font-bold text-gray-950">Resumo diário por e-mail</h3>
-        <p className="mt-1 text-sm text-gray-600">Enviado para {email}; inclui cobranças vencidas e próximas. O envio só funciona após configurar Resend e o cron da Vercel.</p>
-        <form action={atualizarPreferenciasEmail} className="mt-3 flex items-center justify-between gap-4">
-          <label className="flex items-start gap-2 text-sm font-medium text-gray-700">
-            <input type="checkbox" name="email_reminders_enabled" defaultChecked={emailRemindersEnabled} className="mt-1 size-4" />
-            Quero receber o resumo diário
-          </label>
-          <button className="min-h-10 bg-gray-950 px-4 text-sm font-bold text-white">Salvar preferência</button>
-        </form>
+        {emailRemindersConfigured ? <>
+          <p className="mt-1 text-sm text-gray-600">Enviado para {email}; inclui cobranças vencidas e próximas.</p>
+          <form action={atualizarPreferenciasEmail} className="mt-3 flex items-center justify-between gap-4">
+            <label className="flex items-start gap-2 text-sm font-medium text-gray-700">
+              <input type="checkbox" name="email_reminders_enabled" defaultChecked={emailRemindersEnabled} className="mt-1 size-4" />
+              Quero receber o resumo diário
+            </label>
+            <button className="min-h-10 bg-gray-950 px-4 text-sm font-bold text-white">Salvar preferência</button>
+          </form>
+        </> : <p className="mt-1 text-sm text-gray-600">O resumo por e-mail não está configurado agora. Seus lembretes continuam disponíveis dentro do Recebify.</p>}
       </section>
 
       <div id="assinatura" className="settings-section scroll-mt-24 border border-gray-200 bg-white shadow-sm"><SubscriptionPanel /></div>
@@ -145,9 +149,18 @@ export function AccountSettingsPanel({ email, fone, emailRemindersEnabled, canWr
       </section>
 
       <section id="backup" className="settings-section scroll-mt-24 border border-gray-200 bg-white p-5 shadow-sm">
-        <h3 className="font-bold text-gray-950">Restaurar backup</h3>
-        <p className="mt-1 text-sm text-amber-800">A restauração não sobrescreve registros: qualquer ID já existente cancela toda a operação. Faça isso de preferência em uma conta vazia.</p>
-        {canWrite ? <BackupRestoreForm /> : <p className="mt-3 text-sm text-amber-900">Restauração pausada durante o modo de consulta. Exporte os dados agora e assine um plano para importar backups.</p>}
+        <h3 className="font-bold text-gray-950">Seus dados</h3>
+        <p className="mt-1 text-sm text-gray-600">Exporte relatórios ou baixe uma cópia completa dos seus dados. Os arquivos podem conter informações pessoais; guarde-os em local seguro.</p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <a href="/api/export" className="min-h-10 border border-gray-300 px-3 py-2 text-sm font-semibold text-gray-700 hover:border-blue-700 hover:text-blue-700">Exportar cobranças (CSV)</a>
+          <a href="/api/export?tipo=pagamentos" className="min-h-10 border border-gray-300 px-3 py-2 text-sm font-semibold text-gray-700 hover:border-blue-700 hover:text-blue-700">Exportar pagamentos (CSV)</a>
+          <a href="/api/export?formato=json" className="min-h-10 border border-blue-700 px-3 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-50">Baixar backup completo (JSON)</a>
+        </div>
+        <details className="mt-4 border-t border-gray-200 pt-4">
+          <summary className="cursor-pointer text-sm font-semibold text-gray-800">Restaurar um backup JSON (opção avançada)</summary>
+          <p className="mt-3 text-sm text-amber-800">A restauração adiciona registros e nunca substitui os existentes. Se encontrar um ID repetido, cancela a operação inteira. É mais indicada para uma conta vazia.</p>
+          {canWrite ? <BackupRestoreForm /> : accessCheckUnavailable ? <p className="mt-3 text-sm text-red-800">Restauração temporariamente pausada porque não foi possível validar o acesso. Tente novamente mais tarde.</p> : <p className="mt-3 text-sm text-amber-900">Restauração pausada no modo de consulta. Você ainda pode exportar seus dados acima.</p>}
+        </details>
       </section>
     </div>
   );
