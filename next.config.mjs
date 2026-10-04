@@ -8,10 +8,6 @@ const nextConfig = {
         source: "/(.*)",
         headers: [
           {
-            key: "Content-Security-Policy",
-            value: "frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'",
-          },
-          {
             key: "X-Frame-Options",
             value: "DENY",
           },

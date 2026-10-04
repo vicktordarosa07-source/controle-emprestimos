@@ -1,11 +1,28 @@
 import { createServerClient } from "@supabase/ssr";
+import { randomBytes } from "node:crypto";
 import { NextResponse, type NextRequest } from "next/server";
+import { buildContentSecurityPolicy } from "./lib/csp";
 import { getSupabaseEnv } from "./lib/supabase-config";
 
 export async function proxy(request: NextRequest) {
-  let response = NextResponse.next({
-    request,
-  });
+  const nonce = randomBytes(16).toString("base64");
+  const csp = buildContentSecurityPolicy(
+    nonce,
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.NODE_ENV === "development",
+  );
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set("x-nonce", nonce);
+  requestHeaders.set("Content-Security-Policy", csp);
+
+  function nextResponse() {
+    requestHeaders.set("cookie", request.headers.get("cookie") ?? "");
+    const next = NextResponse.next({ request: { headers: requestHeaders } });
+    next.headers.set("Content-Security-Policy", csp);
+    return next;
+  }
+
+  let response = nextResponse();
 
   try {
     const { url, anonKey } = getSupabaseEnv();
@@ -16,7 +33,7 @@ export async function proxy(request: NextRequest) {
         },
         setAll(cookiesToSet) {
           cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
-          response = NextResponse.next({ request });
+          response = nextResponse();
           cookiesToSet.forEach(({ name, value, options }) => {
             response.cookies.set(name, value, options);
           });
