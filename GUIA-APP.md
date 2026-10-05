@@ -10,8 +10,8 @@ Seu sistema `controle-emprestimos` em `app/page.tsx:1` (Next.js 16 + Supabase em
    - `layout.tsx` adicionado `metadata.manifest`, `appleWebApp`, `viewport` e registro do SW
 
 2. **Capacitor** (`capacitor.config.ts`, `package.json:5`, `android/`, `ios/`)
-   - `appId: com.filipedelima.controleemprestimos` (identificador nativo mantido para atualizar instalações existentes), `appName: Recebify - Gestão de cobranças`
-   - Estratégia `server.url: https://recebify.vercel.app` (reaproveita 100% do Next.js sem `next export`)
+   - `appId: com.filipedelima.controleemprestimos` (identificador nativo mantido para atualizar instalações existentes), `appName: CredCash - Gestão de cobranças`
+   - Estratégia `server.url: https://credcash.vercel.app` (reaproveita 100% do Next.js sem `next export`)
    - Alternativa offline: comentar `server.url` e usar `webDir: out` + `output: export` (requer adaptar Supabase para client-only)
 
 ## Como replicar no seu repo
@@ -68,7 +68,7 @@ node ./node_modules/@capacitor/cli/bin/capacitor open ios
 - **Tauri/Electron (nativo)**: mesma estratégia `server.url`:
   ```bash
   npm create tauri-app@latest # escolha vanilla/next
-  # tauri.conf.json: "windows": [{ "url": "https://recebify.vercel.app" }]
+  # tauri.conf.json: "windows": [{ "url": "https://credcash.vercel.app" }]
   # npm run tauri build -> gera .exe/.dmg/.AppImage
   ```
 

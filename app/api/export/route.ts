@@ -47,7 +47,7 @@ export async function GET(request: Request) {
       }, null, 2);
       return new Response(body, { headers: {
         "Content-Type": "application/json; charset=utf-8",
-        "Content-Disposition": `attachment; filename="recebify-backup-${new Date().toISOString().slice(0, 10)}.json"`,
+        "Content-Disposition": `attachment; filename="credcash-backup-${new Date().toISOString().slice(0, 10)}.json"`,
         "Cache-Control": "no-store",
       } });
     }
@@ -72,7 +72,7 @@ export async function GET(request: Request) {
       const csv = `\uFEFF${lines.map((line) => line.map(cell).join(";")).join("\r\n")}`;
       return new Response(csv, { headers: {
         "Content-Type": "text/csv; charset=utf-8",
-        "Content-Disposition": `attachment; filename="recebify-pagamentos-${new Date().toISOString().slice(0, 10)}.csv"`,
+        "Content-Disposition": `attachment; filename="credcash-pagamentos-${new Date().toISOString().slice(0, 10)}.csv"`,
         "Cache-Control": "no-store",
       } });
     }
@@ -94,7 +94,7 @@ export async function GET(request: Request) {
     const csv = `\uFEFF${lines.map((line) => line.map(cell).join(";")).join("\r\n")}`;
     return new Response(csv, { headers: {
       "Content-Type": "text/csv; charset=utf-8",
-      "Content-Disposition": `attachment; filename="recebify-cobrancas-${new Date().toISOString().slice(0, 10)}.csv"`,
+      "Content-Disposition": `attachment; filename="credcash-cobrancas-${new Date().toISOString().slice(0, 10)}.csv"`,
       "Cache-Control": "no-store",
     } });
   } catch (error) {

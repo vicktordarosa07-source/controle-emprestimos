@@ -4,7 +4,7 @@ export default function Loading() {
       <header className="border-b border-gray-200 bg-white">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-4">
           <div>
-            <h1 className="text-xl font-bold text-gray-950 sm:text-2xl">Recebify • Gestão de cobranças</h1>
+            <h1 className="text-xl font-bold text-gray-950 sm:text-2xl">CredCash • Gestão de cobranças</h1>
             <p className="mt-2 h-4 w-52 animate-pulse bg-gray-200" aria-hidden="true" />
           </div>
           <div className="h-10 w-36 animate-pulse bg-gray-200" aria-hidden="true" />

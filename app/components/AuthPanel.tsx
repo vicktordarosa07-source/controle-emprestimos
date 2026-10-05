@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 
 const AUTH_CONFIRM_REDIRECT_URL =
-  `${process.env.NEXT_PUBLIC_SITE_URL ?? "https://recebify.vercel.app"}/auth/confirm`;
+  `${process.env.NEXT_PUBLIC_SITE_URL ?? "https://credcash.vercel.app"}/auth/confirm`;
 
 export function AuthPanel() {
   const router = useRouter();
@@ -96,7 +96,7 @@ export function AuthPanel() {
         <div className="auth-intro">
           <div className="auth-brand">
             <span aria-hidden="true" className="auth-brand-mark">R</span>
-            <span className="auth-brand-name">Recebify</span>
+            <span className="auth-brand-name">CredCash</span>
           </div>
           <div className="auth-copy">
             <h1>{mode === "login" ? "Acesse sua conta" : mode === "signup" ? "Crie seu acesso" : "Redefina sua senha"}</h1>

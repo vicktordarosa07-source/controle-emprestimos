@@ -137,7 +137,7 @@ export function AccountSettingsPanel({ email, fone, emailRemindersEnabled, email
             </label>
             <button className="min-h-10 bg-gray-950 px-4 text-sm font-bold text-white">Salvar preferência</button>
           </form>
-        </> : <p className="mt-1 text-sm text-gray-600">O resumo por e-mail não está configurado agora. Seus lembretes continuam disponíveis dentro do Recebify.</p>}
+        </> : <p className="mt-1 text-sm text-gray-600">O resumo por e-mail não está configurado agora. Seus lembretes continuam disponíveis dentro do CredCash.</p>}
       </section>
 
       <div id="assinatura" className="settings-section scroll-mt-24 border border-gray-200 bg-white shadow-sm"><SubscriptionPanel /></div>

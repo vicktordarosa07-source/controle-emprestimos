@@ -1,6 +1,6 @@
 // Simple SW for PWA installability + offline fallback
 // For Next.js SSR, we cache only static assets, not authenticated pages
-const CACHE_NAME = "controle-emprestimos-v1";
+const CACHE_NAME = "credcash-v1";
 const STATIC_ASSETS = ["/", "/manifest.json"];
 
 self.addEventListener("install", (event) => {

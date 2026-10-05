@@ -1,4 +1,4 @@
-# Checklist antes de vender o Recebify
+# Checklist antes de vender o CredCash
 
 Este checklist separa o que foi endurecido no código do que depende de configuração e teste nas contas reais. Não habilite bloqueio de escrita nem cobre clientes até concluir os itens marcados como bloqueadores.
 
@@ -9,7 +9,7 @@ Este checklist separa o que foi endurecido no código do que depende de configur
 - [ ] Rode `supabase-prelaunch-audit.sql` no projeto de produção e confira RLS, políticas e grants. A consulta é somente leitura. Investigue tabelas críticas sem RLS e grants diretos inesperados para `anon` ou `authenticated`.
 - [ ] Confira que políticas de leitura limitam cada registro ao usuário proprietário; faça um teste controlado com duas contas distintas e sem compartilhar dados reais.
 - [ ] Não ative `saas_billing_settings.enforcement_enabled` até que checkout, confirmação, webhook duplicado, atraso, cancelamento e acesso até o fim do período pago tenham sido verificados no Sandbox.
-- [ ] Configure Auth > URL Configuration no Supabase para o Site URL de produção e os redirects usados pelo app, incluindo `https://recebify.vercel.app/auth/confirm` e `https://recebify.vercel.app/auth/confirm?next=%2Fauth%2Fredefinir-senha`. Evite liberar domínios de preview indiscriminadamente.
+- [ ] Configure Auth > URL Configuration no Supabase para o Site URL `https://credcash.vercel.app` e os redirects usados pelo app, incluindo `https://credcash.vercel.app/auth/confirm` e `https://credcash.vercel.app/auth/confirm?next=%2Fauth%2Fredefinir-senha`. O domínio antigo `recebify.vercel.app` deve permanecer redirecionando para o novo durante a transição. Evite liberar domínios de preview indiscriminadamente.
 - [ ] Configure SMTP transacional do Supabase para confirmação e recuperação de senha; teste recebimento, expiração e reuso de link. O serviço de e-mail padrão é limitado e não é a configuração recomendada para produção.
 - [ ] No Supabase Auth, defina senha mínima de 8 caracteres e ative proteções contra abuso/CAPTCHA ou limites adequados antes de abrir cadastro público.
 - [ ] Faça um teste de recuperação de senha de ponta a ponta e valide que usuário sem sessão não consegue abrir a página de troca.

@@ -1,7 +1,7 @@
 {
-  "name": "Controle de Empréstimos - Filipe de Lima",
-  "short_name": "Empréstimos",
-  "description": "Sistema de controle de empréstimos, parcelas e pagamentos",
+  "name": "CredCash — Gestão de cobranças",
+  "short_name": "CredCash",
+  "description": "Gestão de cobranças, clientes, parcelas e pagamentos",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#f9fafb",

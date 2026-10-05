@@ -34,7 +34,7 @@ export function MfaPanel({ challengeOnly = false }: { challengeOnly?: boolean })
     startTransition(async () => {
       const { data, error: enrollError } = await supabase.auth.mfa.enroll({
         factorType: "totp",
-        friendlyName: "Recebify",
+        friendlyName: "CredCash",
       });
       if (enrollError) { setError(enrollError.message); return; }
       setFactorId(data.id);
@@ -62,7 +62,7 @@ export function MfaPanel({ challengeOnly = false }: { challengeOnly?: boolean })
       } else if (challengeOnly) {
         router.refresh();
       } else {
-        setFactor({ id, friendly_name: "Recebify", status: "verified", factor_type: "totp" });
+        setFactor({ id, friendly_name: "CredCash", status: "verified", factor_type: "totp" });
         setQrCode("");
         setSecret("");
         setMessage("Autenticação em duas etapas ativada.");

@@ -85,7 +85,7 @@ export function SubscriptionPanel() {
   }
 
   function cancelSubscription() {
-    if (!window.confirm("Cancelar sua assinatura do Recebify? As próximas renovações serão interrompidas. Se houver um período já pago, o acesso continua até o vencimento; pagamentos já recebidos não serão estornados.")) return;
+    if (!window.confirm("Cancelar sua assinatura do CredCash? As próximas renovações serão interrompidas. Se houver um período já pago, o acesso continua até o vencimento; pagamentos já recebidos não serão estornados.")) return;
     setError("");
     setMessage("");
     startTransition(async () => {
@@ -113,7 +113,7 @@ export function SubscriptionPanel() {
 
   return (
     <section className="border-t border-gray-200 p-4">
-      <h3 className="font-bold text-gray-950">Plano e assinatura do Recebify</h3>
+      <h3 className="font-bold text-gray-950">Plano e assinatura do CredCash</h3>
       {!state.configured ? (
         <p className="mt-2 text-sm text-amber-800">A migração de assinatura ainda não foi aplicada no Supabase.</p>
       ) : (
@@ -137,8 +137,8 @@ export function SubscriptionPanel() {
                   {pixCharge.imageDataUrl ? <Image src={pixCharge.imageDataUrl} alt="QR Code para pagar a assinatura via Pix" width={220} height={220} unoptimized className="h-[220px] w-[220px] border border-emerald-200 bg-white p-2" /> : null}
                   <div className="min-w-0">
                     <p className="text-sm font-bold text-gray-950">{pixCharge.value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}{pixCharge.dueDate ? ` • vence em ${new Date(`${pixCharge.dueDate}T12:00:00`).toLocaleDateString("pt-BR")}` : ""}</p>
-                    <label htmlFor="recebify-pix-code" className="mt-2 block text-xs font-semibold text-gray-700">Pix copia e cola</label>
-                    <textarea id="recebify-pix-code" readOnly value={pixCharge.payload} rows={4} className="mt-1 w-full break-all border border-gray-300 bg-white p-2 text-xs text-gray-700" />
+                    <label htmlFor="credcash-pix-code" className="mt-2 block text-xs font-semibold text-gray-700">Pix copia e cola</label>
+                    <textarea id="credcash-pix-code" readOnly value={pixCharge.payload} rows={4} className="mt-1 w-full break-all border border-gray-300 bg-white p-2 text-xs text-gray-700" />
                     <div className="mt-2 flex flex-wrap gap-2">
                       <button type="button" onClick={copyPixCode} className="min-h-9 bg-emerald-700 px-3 text-sm font-bold text-white">{copiedPix ? "Código copiado" : "Copiar código Pix"}</button>
                       <button type="button" disabled={pending} onClick={loadPixCharge} className="min-h-9 border border-emerald-700 px-3 text-sm font-bold text-emerald-900 disabled:opacity-50">Atualizar QR</button>
@@ -169,7 +169,7 @@ export function SubscriptionPanel() {
                   </div>
                   {paymentMethod === "PIX" ? (
                     sub?.asaas_customer_id ? (
-                      <p className="border border-gray-200 bg-gray-50 p-3 text-xs text-gray-600">Usaremos o cadastro de cobrança já existente no Asaas. O Recebify não guarda os dados pessoais desse cadastro.</p>
+                      <p className="border border-gray-200 bg-gray-50 p-3 text-xs text-gray-600">Usaremos o cadastro de cobrança já existente no Asaas. O CredCash não guarda os dados pessoais desse cadastro.</p>
                     ) : (
                       <div className="grid gap-3 border border-gray-200 bg-gray-50 p-3 sm:grid-cols-2">
                         <label className="text-sm font-medium text-gray-800 sm:col-span-2">Nome completo<input required name="pix_name" autoComplete="name" maxLength={100} className="mt-1 min-h-10 w-full border border-gray-300 bg-white px-3" /></label>
@@ -179,7 +179,7 @@ export function SubscriptionPanel() {
                         <label className="text-sm font-medium text-gray-800">Endereço<input required name="pix_address" autoComplete="street-address" maxLength={100} className="mt-1 min-h-10 w-full border border-gray-300 bg-white px-3" /></label>
                         <label className="text-sm font-medium text-gray-800">Número<input required name="pix_address_number" autoComplete="off" maxLength={20} className="mt-1 min-h-10 w-full border border-gray-300 bg-white px-3" /></label>
                         <label className="text-sm font-medium text-gray-800">Bairro<input required name="pix_province" autoComplete="address-level3" maxLength={100} className="mt-1 min-h-10 w-full border border-gray-300 bg-white px-3" /></label>
-                        <p className="text-xs text-gray-600 sm:col-span-2">Esses dados são enviados ao Asaas para emitir as cobranças. O Recebify não salva seu CPF/CNPJ nem endereço.</p>
+                        <p className="text-xs text-gray-600 sm:col-span-2">Esses dados são enviados ao Asaas para emitir as cobranças. O CredCash não salva seu CPF/CNPJ nem endereço.</p>
                       </div>
                     )
                   ) : (

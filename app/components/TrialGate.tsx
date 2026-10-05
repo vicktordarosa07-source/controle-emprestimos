@@ -35,7 +35,7 @@ export function TrialGate({ mode, email }: Props) {
     <main className="min-h-screen bg-slate-50 px-4 py-10 sm:py-16">
       <div className="mx-auto max-w-2xl space-y-5">
         <header className="flex flex-wrap items-center justify-between gap-3">
-          <div><p className="text-lg font-extrabold text-slate-950">Recebify</p><p className="text-sm text-slate-500">{email}</p></div>
+          <div><p className="text-lg font-extrabold text-slate-950">CredCash</p><p className="text-sm text-slate-500">{email}</p></div>
           <SignOutButton />
         </header>
         <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-soft sm:p-10">
@@ -46,7 +46,7 @@ export function TrialGate({ mode, email }: Props) {
             <>
               <p className="text-xs font-bold uppercase tracking-widest text-blue-700">Seu acesso está pronto</p>
               <h1 className="mt-2 text-3xl font-extrabold tracking-tight text-slate-950">Ative {TRIAL_DAYS} dias grátis para começar</h1>
-              <p className="mt-3 text-sm leading-6 text-slate-600">O prazo só começa quando você ativar o teste. Durante {TRIAL_DAYS} dias, use as ferramentas do Recebify sem pagar. Depois, o uso fica pausado até você escolher um plano e confirmar o pagamento.</p>
+              <p className="mt-3 text-sm leading-6 text-slate-600">O prazo só começa quando você ativar o teste. Durante {TRIAL_DAYS} dias, use as ferramentas do CredCash sem pagar. Depois, o uso fica pausado até você escolher um plano e confirmar o pagamento.</p>
               <p className="mt-3 text-sm font-semibold text-slate-700">Sem cobrança automática ao fim do teste.</p>
               <button type="button" disabled={pending} onClick={activate} className="mt-6 min-h-12 rounded-xl bg-blue-700 px-6 font-bold text-white hover:bg-blue-800 disabled:opacity-60">{pending ? "Ativando…" : `Ativar meus ${TRIAL_DAYS} dias grátis`}</button>
             </>
@@ -59,7 +59,7 @@ export function TrialGate({ mode, email }: Props) {
           ) : (
             <>
               <h1 className="text-2xl font-extrabold text-slate-950">{mode === "expired" ? "Seus 7 dias de teste terminaram" : "Seu acesso está pausado"}</h1>
-              <p className="mt-3 text-sm leading-6 text-slate-600">Suas cobranças continuam guardadas. Para voltar a usar o Recebify, escolha a forma de pagamento abaixo. O acesso é liberado após a confirmação pelo Asaas.</p>
+              <p className="mt-3 text-sm leading-6 text-slate-600">Suas cobranças continuam guardadas. Para voltar a usar o CredCash, escolha a forma de pagamento abaixo. O acesso é liberado após a confirmação pelo Asaas.</p>
               <a href="/api/export?formato=json" className="mt-4 inline-block text-sm font-semibold text-blue-700 underline">Baixar uma cópia dos meus dados</a>
             </>
           )}

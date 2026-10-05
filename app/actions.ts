@@ -26,7 +26,7 @@ import { buildRecurringCheckoutPayload, getAsaasCheckoutUrl } from "@/lib/asaas-
 import { asPixImageDataUrl, buildRecurringPixSubscriptionPayload } from "@/lib/asaas-pix";
 import { assertSaasWriteAccess } from "@/lib/saas-access";
 
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://recebify.vercel.app";
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://credcash.vercel.app";
 
 function asaasApiUrl(environment: "sandbox" | "production") {
   return environment === "sandbox"
@@ -366,7 +366,7 @@ export async function restaurarBackup(formData: FormData) {
     throw new Error("O arquivo não contém JSON válido.");
   }
   if (!backup || typeof backup !== "object" || (backup as { formato?: unknown }).formato !== "fluxo-backup-v1") {
-    throw new Error("Este não é um backup válido do Recebify.");
+    throw new Error("Este não é um backup válido do CredCash.");
   }
 
   const { data, error } = await supabase.rpc("restore_fluxo_backup", {
@@ -378,7 +378,7 @@ export async function restaurarBackup(formData: FormData) {
 }
 
 const PLAN_CONFIG = {
-  starter: { name: "Recebify Essencial", monthlyPrice: process.env.SAAS_STARTER_MONTHLY_BRL },
+  starter: { name: "CredCash Essencial", monthlyPrice: process.env.SAAS_STARTER_MONTHLY_BRL },
 } as const;
 
 type SaasPixCharge = {
@@ -524,9 +524,9 @@ export async function assinarPlanoFluxo(formData: FormData, confirmarProducao = 
 
   const apiKey = process.env.ASAAS_PLATFORM_API_KEY;
   const environment = process.env.ASAAS_PLATFORM_ENV === "production" ? "production" : "sandbox";
-  if (!apiKey) throw new Error("A cobrança da assinatura Recebify ainda não foi configurada.");
+  if (!apiKey) throw new Error("A cobrança da assinatura CredCash ainda não foi configurada.");
   if (environment === "production" && process.env.ASAAS_PLATFORM_LIVE_BILLING_ENABLED !== "true") {
-    throw new Error("A cobrança real do Recebify está bloqueada até a habilitação explícita do administrador.");
+    throw new Error("A cobrança real do CredCash está bloqueada até a habilitação explícita do administrador.");
   }
   if (environment === "production" && confirmarProducao !== true) {
     throw new Error("Confirme explicitamente a criação da assinatura em produção.");
@@ -543,7 +543,7 @@ export async function assinarPlanoFluxo(formData: FormData, confirmarProducao = 
   if (existing?.asaas_subscription_id && existing.status !== "canceled") {
     if (paymentMethod === "PIX" && existing.asaas_billing_type === "PIX") {
       const base = asaasApiUrl(environment);
-      const pixCharge = await obterCobrancaPixAsaas(base, { access_token: apiKey, "User-Agent": "Recebify/1.0" }, existing.asaas_subscription_id);
+      const pixCharge = await obterCobrancaPixAsaas(base, { access_token: apiKey, "User-Agent": "CredCash/1.0" }, existing.asaas_subscription_id);
       return { ok: true as const, paymentMethod: "PIX" as const, pixCharge };
     }
     throw new Error("Já existe uma assinatura ativa ou em andamento. Cancele-a antes de trocar de forma de pagamento.");
@@ -556,7 +556,7 @@ export async function assinarPlanoFluxo(formData: FormData, confirmarProducao = 
   }
 
   const base = asaasApiUrl(environment);
-  const headers = { access_token: apiKey, "Content-Type": "application/json", "User-Agent": "Recebify/1.0" };
+  const headers = { access_token: apiKey, "Content-Type": "application/json", "User-Agent": "CredCash/1.0" };
   const nextDueDate = formatDateOnly(new Date());
 
   if (paymentMethod === "PIX") {
@@ -608,7 +608,7 @@ export async function assinarPlanoFluxo(formData: FormData, confirmarProducao = 
       asaas_environment: environment, updated_at: new Date().toISOString(),
     }).eq("user_id", user.id);
     if (linkError) {
-      console.error("Assinatura Pix Recebify criada, mas não foi possível vinculá-la ao usuário", { userId: user.id, subscriptionId: asaasSubscriptionId, message: linkError.message });
+      console.error("Assinatura Pix CredCash criada, mas não foi possível vinculá-la ao usuário", { userId: user.id, subscriptionId: asaasSubscriptionId, message: linkError.message });
       throw new Error("A assinatura foi iniciada, mas não conseguimos vinculá-la à conta. Não tente pagar; fale com o suporte.");
     }
     revalidatePath("/");
@@ -649,7 +649,7 @@ export async function assinarPlanoFluxo(formData: FormData, confirmarProducao = 
   });
   if (error) {
     await fetch(`${base}/checkouts/${encodeURIComponent(checkout.id)}/cancel`, { method: "POST", headers, cache: "no-store" }).catch(() => undefined);
-    console.error("Checkout Recebify criado, mas não foi possível vinculá-lo ao usuário", { userId: user.id, checkoutId: checkout.id, message: error.message });
+      console.error("Checkout CredCash criado, mas não foi possível vinculá-lo ao usuário", { userId: user.id, checkoutId: checkout.id, message: error.message });
     throw new Error("O checkout foi iniciado, mas não conseguimos vinculá-lo à conta. Não tente pagar; fale com o suporte.");
   }
   revalidatePath("/");
@@ -675,7 +675,7 @@ export async function obterCobrancaPixAssinatura() {
   const apiKey = process.env.ASAAS_PLATFORM_API_KEY;
   if (!apiKey) throw new Error("A conexão de cobrança não está disponível.");
   const environment = subscription.asaas_environment === "production" ? "production" : "sandbox";
-  const charge = await obterCobrancaPixAsaas(asaasApiUrl(environment), { access_token: apiKey, "User-Agent": "Recebify/1.0" }, subscription.asaas_subscription_id);
+  const charge = await obterCobrancaPixAsaas(asaasApiUrl(environment), { access_token: apiKey, "User-Agent": "CredCash/1.0" }, subscription.asaas_subscription_id);
   return { charge };
 }
 
@@ -689,7 +689,7 @@ export async function cancelarAssinaturaFluxo() {
   const apiKey = process.env.ASAAS_PLATFORM_API_KEY;
   if (!apiKey) throw new Error("A conexão de cobrança do SaaS não está disponível.");
   const base = environment === "production" ? "https://api.asaas.com/v3" : "https://api-sandbox.asaas.com/v3";
-  const headers = { access_token: apiKey, "User-Agent": "Recebify/1.0" };
+  const headers = { access_token: apiKey, "User-Agent": "CredCash/1.0" };
   const response = subscription.asaas_subscription_id
     ? await fetch(`${base}/subscriptions/${encodeURIComponent(subscription.asaas_subscription_id)}`, { method: "DELETE", headers, cache: "no-store" })
     : await fetch(`${base}/checkouts/${encodeURIComponent(subscription.asaas_checkout_id!)}/cancel`, { method: "POST", headers, cache: "no-store" });
@@ -766,13 +766,13 @@ export async function criarLinkAsaas(parcelaId: string, confirmarCobrancaReal = 
     const search = new URL(`${baseUrl}/customers`);
     search.searchParams.set("externalReference", client.id);
     search.searchParams.set("limit", "1");
-    const foundResponse = await fetch(search, { headers: { access_token: apiKey, "User-Agent": "Recebify/1.0" }, cache: "no-store" });
+    const foundResponse = await fetch(search, { headers: { access_token: apiKey, "User-Agent": "CredCash/1.0" }, cache: "no-store" });
     const foundBody = await foundResponse.json() as { data?: { id: string }[] };
     customerId = foundBody.data?.[0]?.id ?? null;
     if (!customerId) {
       const customerResponse = await fetch(`${baseUrl}/customers`, {
         method: "POST",
-        headers: { access_token: apiKey, "Content-Type": "application/json", "User-Agent": "Recebify/1.0" },
+        headers: { access_token: apiKey, "Content-Type": "application/json", "User-Agent": "CredCash/1.0" },
         body: JSON.stringify({
           name: client.nome,
           cpfCnpj: client.cpf || undefined,
@@ -798,7 +798,7 @@ export async function criarLinkAsaas(parcelaId: string, confirmarCobrancaReal = 
   priorPaymentsUrl.searchParams.set("customer", customerId);
   priorPaymentsUrl.searchParams.set("limit", "10");
   const priorResponse = await fetch(priorPaymentsUrl, {
-    headers: { access_token: apiKey, "User-Agent": "Recebify/1.0" },
+    headers: { access_token: apiKey, "User-Agent": "CredCash/1.0" },
     cache: "no-store",
   });
   if (!priorResponse.ok) throw new Error("Não foi possível verificar cobranças existentes no Asaas.");
@@ -823,13 +823,13 @@ export async function criarLinkAsaas(parcelaId: string, confirmarCobrancaReal = 
     : parcela.data_vencimento;
   const paymentResponse = await fetch(`${baseUrl}/payments`, {
     method: "POST",
-    headers: { access_token: apiKey, "Content-Type": "application/json", "User-Agent": "Recebify/1.0" },
+    headers: { access_token: apiKey, "Content-Type": "application/json", "User-Agent": "CredCash/1.0" },
     body: JSON.stringify({
       customer: customerId,
       billingType: "UNDEFINED",
       value: saldo,
       dueDate,
-      description: `${loan.descricao || "Cobrança Recebify"} - parcela ${parcela.numero}`.slice(0, 500),
+      description: `${loan.descricao || "Cobrança CredCash"} - parcela ${parcela.numero}`.slice(0, 500),
       externalReference: parcela.id,
     }),
     cache: "no-store",
@@ -848,7 +848,7 @@ export async function criarLinkAsaas(parcelaId: string, confirmarCobrancaReal = 
     status: payment.status ?? "PENDING",
     invoice_url: payment.invoiceUrl,
   });
-  if (saveChargeError) throw new Error("Link gerado, mas não foi possível registrar a conciliação no Recebify.");
+  if (saveChargeError) throw new Error("Link gerado, mas não foi possível registrar a conciliação no CredCash.");
   revalidatePath("/");
   return payment.invoiceUrl;
 }

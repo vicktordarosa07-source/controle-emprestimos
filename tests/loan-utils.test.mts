@@ -70,9 +70,9 @@ test("datas de vencimento usam o calendário de São Paulo independentemente do 
 
 test("checkout recorrente usa cartão no Asaas e fornece callbacks de retorno", () => {
   const payload = buildRecurringCheckoutPayload({
-    siteUrl: "https://recebify.vercel.app",
+    siteUrl: "https://credcash.vercel.app",
     externalReference: "user-example",
-    planName: "Recebify Essencial",
+    planName: "CredCash Essencial",
     price: 5,
     nextDueDate: "2026-10-02",
   });
@@ -115,7 +115,7 @@ test("assinatura Pix configura cobrança recorrente mensal sem débito automáti
   assert.deepEqual(buildRecurringPixSubscriptionPayload({
     customerId: "cus_test_123",
     externalReference: "user-example",
-    planName: "Recebify Essencial",
+    planName: "CredCash Essencial",
     price: 29.9,
     nextDueDate: "2026-10-03",
   }), {
@@ -124,7 +124,7 @@ test("assinatura Pix configura cobrança recorrente mensal sem débito automáti
     nextDueDate: "2026-10-03",
     value: 29.9,
     cycle: "MONTHLY",
-    description: "Assinatura mensal Recebify Essencial",
+    description: "Assinatura mensal CredCash Essencial",
     externalReference: "user-example",
   });
 });

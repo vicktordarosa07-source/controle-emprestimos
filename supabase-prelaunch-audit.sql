@@ -1,4 +1,4 @@
--- Auditoria somente de leitura para preparar o Recebify para venda.
+-- Auditoria somente de leitura para preparar o CredCash para venda.
 -- Rode no SQL Editor do projeto Supabase de PRODUÇÃO. Não lê registros de clientes,
 -- não altera dados e não ativa enforcement.
 

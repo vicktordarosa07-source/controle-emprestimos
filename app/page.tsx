@@ -895,7 +895,7 @@ function FirstCobrancaGuide({ canWrite }: { canWrite: boolean }) {
     <section className="border border-blue-200 bg-white p-5 shadow-sm sm:p-6" aria-labelledby="primeiros-passos-title">
       <p className="text-xs font-bold uppercase tracking-wide text-blue-700">Primeiros passos</p>
       <h2 id="primeiros-passos-title" className="mt-1 text-xl font-bold text-gray-950">Organize sua primeira cobrança</h2>
-      <p className="mt-2 max-w-2xl text-sm text-gray-600">No Recebify, cliente, valor e parcelas ficam reunidos no mesmo cadastro. Depois, acompanhe vencimentos, registre pagamentos e consulte o histórico.</p>
+      <p className="mt-2 max-w-2xl text-sm text-gray-600">No CredCash, cliente, valor e parcelas ficam reunidos no mesmo cadastro. Depois, acompanhe vencimentos, registre pagamentos e consulte o histórico.</p>
       <ol className="mt-4 grid gap-3 text-sm text-gray-700 sm:grid-cols-3">
         <li className="border border-gray-200 p-3"><strong className="block text-gray-950">1. Cadastre</strong>Informe os dados básicos do cliente.</li>
         <li className="border border-gray-200 p-3"><strong className="block text-gray-950">2. Configure</strong>Defina o valor, o número de parcelas e o primeiro vencimento.</li>
@@ -1109,7 +1109,7 @@ export default async function Home({ searchParams }: PageProps) {
         <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-xl font-bold text-gray-950 sm:text-2xl">
-              Recebify • Gestão de cobranças
+              CredCash • Gestão de cobranças
             </h1>
             <p className="text-sm font-medium text-gray-500">
               {activeView === "configuracoes" ? userEmail : `${userEmail} • ${abertas.length} em aberto • ${atrasadas.length} atrasada(s)`}
