@@ -130,43 +130,66 @@
 
   .auth-shell {
     min-height: 100vh;
+    min-height: 100svh;
     display: grid;
     place-items: center;
-    padding: 32px;
-    background: #f5f7fa;
+    padding: 0;
+    background-color: #f5f7fa;
+  }
+  .auth-login-shell {
+    background-image: url("/login-office-v2.webp");
+    background-position: center top;
+    background-size: 138% auto;
   }
   .auth-layout {
-    width: min(100%, 1120px);
-    min-height: min(680px, calc(100vh - 64px));
+    width: min(100%, 1680px);
+    min-height: 100vh;
+    min-height: 100svh;
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(420px, .92fr);
-    overflow: hidden;
-    border: 1px solid #dce3eb;
-    border-radius: 10px;
-    background: white;
-    box-shadow: 0 8px 28px rgba(16, 33, 59, 0.07);
+    grid-template-columns: minmax(0, 1.08fr) minmax(0, 1fr);
+    gap: clamp(20px, 3vw, 48px);
+    align-items: center;
+    padding: 0 clamp(28px, 4.2vw, 64px) 0 clamp(30px, 5.5vw, 84px);
   }
   .auth-intro {
+    align-self: stretch;
     display: flex;
     flex-direction: column;
-    justify-content: center;
-    gap: 36px;
-    padding: clamp(36px, 5vw, 72px);
-    background: #fff;
+    justify-content: flex-start;
+    align-items: flex-start;
+    padding: clamp(28px, 8vh, 72px) 0 28px;
+    background: transparent;
   }
-  .auth-brand { display: flex; align-items: center; color: var(--navy); }
-  .auth-brand-name { font-size: 1.5rem; font-weight: 720; letter-spacing: -.045em; }
-  .auth-copy { max-width: 360px; }
-  .auth-copy h1 { font-size: clamp(2rem, 4vw, 2.65rem); line-height: 1.12; font-weight: 720; }
-  .auth-copy p { margin-top: 14px; color: #53627a; font-size: 1rem; line-height: 1.7; }
-  .auth-intro ul { color: #45556c; }
-  .auth-form-side { display: grid; place-items: center; padding: clamp(32px, 5vw, 64px); border-left: 1px solid #e7ebf0; background: #fbfcfd; }
-  .auth-form-card { width: 100%; max-width: 410px; }
-  .auth-tabs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0; border-bottom: 1px solid #dce3eb; padding: 0; }
-  .auth-tabs button { min-height: 46px; border-radius: 0; border-bottom: 2px solid transparent; }
-  .auth-tabs button[aria-pressed="true"] { border-bottom-color: var(--brand); background: transparent; color: var(--brand); box-shadow: none; }
-  .auth-form-card input { border-radius: 6px; }
-  .auth-primary-button { border-radius: 6px; box-shadow: none; }
+  .auth-brand { display: flex; flex-direction: column; align-items: flex-start; color: #10213b; }
+  .auth-brand-name { font-size: clamp(2.1rem, 3.3vw, 2.8rem); font-weight: 720; letter-spacing: -.055em; line-height: 1.1; }
+  .auth-brand-rule { width: 52px; height: 4px; margin-top: clamp(25px, 4.2vh, 40px); background: #0caa9a; }
+  .auth-copy { width: 100%; max-width: 660px; margin-top: clamp(22px, 3.6vh, 34px); }
+  .auth-copy h1 { font-size: clamp(2.25rem, 4.4vw, 3.75rem); line-height: 1.08; font-weight: 720; letter-spacing: -.04em; }
+  .auth-copy p { margin-top: 14px; color: #465264; font-size: clamp(1.25rem, 2.5vw, 2rem); line-height: 1.3; }
+  .auth-benefits { display: grid; gap: clamp(12px, 2vh, 20px); width: 100%; max-width: 670px; margin-top: clamp(25px, 4.2vh, 40px); color: #273547; }
+  .auth-benefits li { display: grid; grid-template-columns: 64px minmax(0, 1fr); align-items: center; gap: 22px; font-size: clamp(.95rem, 1.25vw, 1.2rem); line-height: 1.45; }
+  .auth-benefit-icon { display: grid; width: 64px; height: 64px; place-items: center; border-radius: 50%; background: #e4f6f3; }
+  .auth-benefit-icon svg { width: 27px; height: 27px; stroke: #0d9d8e; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+  .auth-benefit-chart-base { stroke-width: 1.5; }
+  .auth-benefit-chart-bar { fill: #0d9d8e; stroke: #0d9d8e; stroke-width: .7; }
+  .auth-form-side { display: grid; place-items: center; padding: 22px 0; background: transparent; }
+  .auth-form-card { width: 100%; max-width: 620px; padding: clamp(30px, 3.5vw, 52px); border: 1px solid #d9e0e8; border-radius: 12px; background: rgba(255,255,255,.97); box-shadow: 0 5px 22px rgba(18, 31, 48, .07); }
+  .auth-tabs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0; border-bottom: 1px solid #d2d9e2; padding: 0; }
+  .auth-tabs button { min-height: 64px; border-radius: 0; border-bottom: 3px solid transparent; font-size: 1.05rem; }
+  .auth-tabs button[aria-pressed="true"] { border-bottom-color: #1557bd; background: transparent; color: #10213b; box-shadow: none; }
+  .auth-form-card form { display: flex; flex-direction: column; gap: 22px; }
+  .auth-form-card label { margin-bottom: 8px; color: #26364b; font-size: 1rem; }
+  .auth-form-card input { min-height: 64px; border-radius: 8px; border-color: #ccd5df; padding: 0 20px; font-size: 1rem; }
+  .auth-form-card input::placeholder { color: #8a95a4; }
+  .auth-password-control { position: relative; }
+  .auth-password-control input { padding-right: 58px; }
+  .auth-password-toggle { position: absolute; top: 50%; right: 16px; display: grid; width: 34px; height: 34px; place-items: center; padding: 5px; border: 0; background: transparent; color: #758293; transform: translateY(-50%); }
+  .auth-password-toggle svg { width: 24px; height: 24px; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+  .auth-password-toggle:active:not(:disabled) { transform: translateY(calc(-50% + 1px)); }
+  .auth-primary-button { min-height: 68px; border-radius: 9px; box-shadow: none; font-size: 1.05rem; }
+  .auth-form-footer { display: flex; align-items: center; gap: 20px; margin-top: 34px; text-align: center; }
+  .auth-form-footer::before, .auth-form-footer::after { height: 1px; flex: 1; background: #d1d9e3; content: ""; }
+  .auth-forgot-link { flex: 0 0 auto; border: 0; background: transparent; color: #1557bd; font-size: 1rem; font-weight: 500; text-decoration: none; }
   .auth-reset-card { border-radius: 10px; box-shadow: 0 8px 28px rgba(16, 33, 59, 0.07); }
 
   .settings-section, .content-panel, .transaction-row, .reminder-card {
@@ -191,7 +214,7 @@
     box-shadow: 0 1px 3px rgba(21, 89, 214, .1);
   }
   .app-content input:not([type="checkbox"]):not([type="radio"]),
-  .app-content select, .auth-form-card input {
+  .app-content select {
     min-height: 44px;
     border-radius: var(--radius-control);
     border-color: #d7e0ec;
@@ -224,11 +247,25 @@
   .app-header .header-actions > button:last-child { white-space: nowrap; }
   .app-mobile-nav { margin-bottom: 0; }
   .auth-shell { place-items: start center; padding: 16px; }
-  .auth-layout { min-height: 0; grid-template-columns: 1fr; border-radius: 8px; }
-  .auth-intro { gap: 22px; padding: 26px 22px 20px; }
-  .auth-copy h1 { font-size: 1.8rem; }
-  .auth-copy p { margin-top: 8px; font-size: .9rem; }
-  .auth-form-side { padding: 22px; border-top: 1px solid #e7ebf0; border-left: 0; }
+  .auth-login-shell { background-position: center; background-size: cover; }
+  .auth-layout { width: min(100%, 620px); min-height: 0; grid-template-columns: 1fr; gap: 0; padding: 0; }
+  .auth-intro { padding: 26px 24px 22px; background: rgba(255,255,255,.95); }
+  .auth-brand-name { font-size: 2rem; }
+  .auth-brand-rule { width: 42px; height: 3px; margin-top: 18px; }
+  .auth-copy { margin-top: 18px; }
+  .auth-copy h1 { font-size: 1.9rem; }
+  .auth-copy p { margin-top: 8px; font-size: 1rem; line-height: 1.5; }
+  .auth-benefits { gap: 12px; margin-top: 20px; }
+  .auth-benefits li { grid-template-columns: 44px minmax(0, 1fr); gap: 12px; font-size: .9rem; }
+  .auth-benefit-icon { width: 44px; height: 44px; }
+  .auth-benefit-icon svg { width: 21px; height: 21px; }
+  .auth-form-side { padding: 0 24px 26px; background: rgba(255,255,255,.95); }
+  .auth-form-card { max-width: none; padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+  .auth-tabs button { min-height: 52px; font-size: .95rem; }
+  .auth-form-card input { min-height: 52px; }
+  .auth-primary-button { min-height: 54px; }
+  .auth-form-footer { gap: 12px; margin-top: 24px; }
+  .auth-forgot-link { font-size: .92rem; }
   .summary-card { min-height: 96px; padding: 15px 16px; }
 }
 

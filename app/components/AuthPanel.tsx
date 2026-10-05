@@ -7,6 +7,31 @@ import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 const AUTH_CONFIRM_REDIRECT_URL =
   `${process.env.NEXT_PUBLIC_SITE_URL ?? "https://credcash.vercel.app"}/auth/confirm`;
 
+const AUTH_BENEFITS = [
+  { label: "Veja cobranças em aberto, vencidas e pagas.", icon: "ledger" },
+  { label: "Registre pagamentos parciais e consulte o histórico.", icon: "payment" },
+  { label: "Exporte seus relatórios e mantenha uma cópia dos dados.", icon: "chart" },
+] as const;
+
+function AuthBenefitIcon({ icon }: { icon: (typeof AUTH_BENEFITS)[number]["icon"] }) {
+  return (
+    <span className="auth-benefit-icon" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" focusable="false">
+        {icon === "ledger" ? <>
+          <rect x="5" y="3.5" width="14" height="17" rx="1.5" />
+          <path d="M9 8h6M9 12h6M9 16h4" />
+        </> : icon === "payment" ? <>
+          <rect x="3.5" y="5.5" width="17" height="13" rx="2" />
+          <path d="M4 9.5h16" />
+        </> : <>
+          <path className="auth-benefit-chart-base" d="M4 20h17" />
+          <path className="auth-benefit-chart-bar" d="M6 18v-5h3v5zM11 18V9h3v9zM16 18V5h3v13z" />
+        </>}
+      </svg>
+    </span>
+  );
+}
+
 export function AuthPanel() {
   const router = useRouter();
   const supabase = useMemo(() => createSupabaseBrowserClient(), []);
@@ -14,6 +39,7 @@ export function AuthPanel() {
   const [mode, setMode] = useState<"login" | "signup" | "recover">("login");
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -88,14 +114,16 @@ export function AuthPanel() {
     setMode(nextMode);
     setError(null);
     setMessage(null);
+    setShowPassword(false);
   }
 
   return (
-    <main className="auth-shell">
+    <main className="auth-shell auth-login-shell">
       <section className="auth-layout">
         <div className="auth-intro">
           <div className="auth-brand">
             <span className="auth-brand-name">CredCash</span>
+            <span className="auth-brand-rule" aria-hidden="true" />
           </div>
           <div className="auth-copy">
             <h1>{mode === "login" ? "Acesse sua conta" : mode === "signup" ? "Crie seu acesso" : "Redefina sua senha"}</h1>
@@ -107,16 +135,17 @@ export function AuthPanel() {
                 : "Informe seu e-mail e enviaremos um link seguro para criar outra senha."}
             </p>
           </div>
-          {mode !== "recover" ? <ul className="mt-6 space-y-3 text-sm text-gray-700">
-            <li>• Veja cobranças em aberto, vencidas e pagas.</li>
-            <li>• Registre pagamentos parciais e consulte o histórico.</li>
-            <li>• Exporte seus relatórios e mantenha uma cópia dos dados.</li>
+          {mode !== "recover" ? <ul className="auth-benefits" aria-label="Recursos do CredCash">
+            {AUTH_BENEFITS.map((benefit) => <li key={benefit.label}>
+              <AuthBenefitIcon icon={benefit.icon} />
+              <span>{benefit.label}</span>
+            </li>)}
           </ul> : null}
         </div>
 
         <div className="auth-form-side">
           <div className="auth-form-card">
-        {mode !== "recover" ? <div className="auth-tabs mb-6">
+        {mode !== "recover" ? <div className="auth-tabs mb-10" role="group" aria-label="Acesso à conta">
           <button
             type="button"
             onClick={() => changeMode("login")}
@@ -165,6 +194,7 @@ export function AuthPanel() {
               type="email"
               required
               autoComplete="email"
+              placeholder="seu@email.com"
               className="min-h-11 w-full border border-gray-300 px-3 text-sm outline-none focus:border-blue-700 focus:ring-2 focus:ring-blue-100"
             />
           </div>
@@ -192,15 +222,26 @@ export function AuthPanel() {
             <label className="mb-1 block text-sm font-semibold" htmlFor="password">
               Senha
             </label>
-            <input
-              id="password"
-              name="password"
-              type="password"
-              required
-              minLength={mode === "signup" ? 8 : undefined}
-              autoComplete={mode === "signup" ? "new-password" : "current-password"}
-              className="min-h-11 w-full border border-gray-300 px-3 text-sm outline-none focus:border-blue-700 focus:ring-2 focus:ring-blue-100"
-            />
+            <div className="auth-password-control">
+              <input
+                id="password"
+                name="password"
+                type={showPassword ? "text" : "password"}
+                required
+                minLength={mode === "signup" ? 8 : undefined}
+                autoComplete={mode === "signup" ? "new-password" : "current-password"}
+                className="min-h-11 w-full border border-gray-300 px-3 text-sm outline-none focus:border-blue-700 focus:ring-2 focus:ring-blue-100"
+              />
+              <button
+                type="button"
+                className="auth-password-toggle"
+                onClick={() => setShowPassword((visible) => !visible)}
+                aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}
+                aria-pressed={showPassword}
+              >
+                {showPassword ? <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m3 3 18 18M10.6 10.7a2 2 0 0 0 2.7 2.7" /><path d="M9.9 5.3A10.8 10.8 0 0 1 12 5c5 0 8.5 4.5 9.5 6.3a1.4 1.4 0 0 1 0 1.4 15 15 0 0 1-3.1 3.6M6.2 6.3a15.3 15.3 0 0 0-3.7 5 1.4 1.4 0 0 0 0 1.4C3.5 14.5 7 19 12 19c1.4 0 2.7-.4 3.8-1" /></svg> : <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M2.5 12s3.4-6.5 9.5-6.5 9.5 6.5 9.5 6.5-3.4 6.5-9.5 6.5S2.5 12 2.5 12Z" /><circle cx="12" cy="12" r="2.6" /></svg>}
+              </button>
+            </div>
           </div> : null}
 
             {mode === "signup" ? (
@@ -233,8 +274,8 @@ export function AuthPanel() {
                 : mode === "recover" ? "Enviar link de redefinição" : "Entrar"}
           </button>
         </form>
-        <div className="mt-4 text-center text-sm">
-          {mode === "login" ? <button type="button" onClick={() => changeMode("recover")} className="font-semibold text-blue-700 underline">Esqueci minha senha</button> : mode === "recover" ? <button type="button" onClick={() => changeMode("login")} className="font-semibold text-blue-700 underline">Voltar para entrar</button> : null}
+        <div className="auth-form-footer">
+          {mode === "login" ? <button type="button" onClick={() => changeMode("recover")} className="auth-forgot-link">Esqueci minha senha</button> : mode === "recover" ? <button type="button" onClick={() => changeMode("login")} className="auth-forgot-link">Voltar para entrar</button> : null}
         </div>
           </div>
         </div>
