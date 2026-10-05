@@ -398,7 +398,8 @@ function AccessPending({ email, status }: { email: string; status: string }) {
 
   return (
     <main className="auth-shell">
-      <section className="w-full max-w-md rounded-2xl border border-gray-200 bg-white p-8 text-center shadow-soft">
+      <section className="auth-reset-card w-full max-w-md border border-gray-200 bg-white p-8 text-center">
+        <div className="auth-brand mb-8 justify-center"><span className="auth-brand-name">CredCash</span></div>
         <h1 className="text-2xl font-bold text-gray-950">
           {blocked ? "Acesso bloqueado" : "Aguardando aprovação"}
         </h1>

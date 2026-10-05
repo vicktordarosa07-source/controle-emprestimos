@@ -95,7 +95,6 @@ export function AuthPanel() {
       <section className="auth-layout">
         <div className="auth-intro">
           <div className="auth-brand">
-            <span aria-hidden="true" className="auth-brand-mark">R</span>
             <span className="auth-brand-name">CredCash</span>
           </div>
           <div className="auth-copy">
@@ -113,12 +112,11 @@ export function AuthPanel() {
             <li>• Registre pagamentos parciais e consulte o histórico.</li>
             <li>• Exporte seus relatórios e mantenha uma cópia dos dados.</li>
           </ul> : null}
-          <div className="auth-aside-line" aria-hidden="true" />
         </div>
 
         <div className="auth-form-side">
           <div className="auth-form-card">
-        <div className="auth-tabs mb-6">
+        {mode !== "recover" ? <div className="auth-tabs mb-6">
           <button
             type="button"
             onClick={() => changeMode("login")}
@@ -143,7 +141,7 @@ export function AuthPanel() {
           >
             Cadastrar
           </button>
-        </div>
+        </div> : null}
 
         <form className="space-y-4" onSubmit={handleSubmit}>
           {error ? (
@@ -224,7 +222,7 @@ export function AuthPanel() {
 
           <button
             disabled={isPending}
-            className="min-h-12 w-full rounded-xl bg-blue-700 px-4 text-sm font-bold text-white shadow-sm hover:bg-blue-800 disabled:opacity-50"
+            className="auth-primary-button min-h-12 w-full bg-blue-700 px-4 text-sm font-bold text-white hover:bg-blue-800 disabled:opacity-50"
           >
             {isPending
               ? mode === "signup"
